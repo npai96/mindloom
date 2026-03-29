@@ -1,0 +1,261 @@
+:root {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  color: #1b1a17;
+  background:
+    radial-gradient(circle at top left, rgba(221, 176, 93, 0.32), transparent 34%),
+    linear-gradient(135deg, #f8f3e8, #efe2c6 42%, #d7c7a8);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+}
+
+.hero {
+  padding: 40px 28px;
+  background: rgba(49, 40, 25, 0.88);
+  color: #f8f3e8;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.workspace {
+  padding: 28px;
+  display: grid;
+  gap: 20px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  color: #f2c879;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.1rem, 4vw, 3.5rem);
+  line-height: 0.95;
+}
+
+.lede {
+  color: rgba(248, 243, 232, 0.88);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat-card,
+.panel,
+.draft-card,
+.suggestion-card,
+.quiz-card,
+.graph-node,
+.result-box {
+  border-radius: 20px;
+  border: 1px solid rgba(54, 38, 7, 0.12);
+  background: rgba(255, 250, 240, 0.82);
+  box-shadow: 0 14px 40px rgba(73, 54, 19, 0.08);
+}
+
+.stat-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 250, 240, 0.12);
+  border-color: rgba(255, 232, 190, 0.18);
+}
+
+.stat-card span {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.panel {
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.capture-form,
+.quiz-list,
+.suggestions {
+  display: grid;
+  gap: 12px;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(89, 68, 20, 0.2);
+  padding: 12px 14px;
+  background: rgba(255, 252, 247, 0.9);
+}
+
+.draft-list {
+  display: grid;
+  gap: 10px;
+}
+
+.draft-card {
+  text-align: left;
+  padding: 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.draft-card.active {
+  outline: 2px solid #8a5a10;
+}
+
+.draft-title {
+  font-weight: 700;
+}
+
+.prompt-list,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip,
+.primary,
+.secondary {
+  border-radius: 999px;
+  border: none;
+  padding: 10px 16px;
+}
+
+.primary {
+  background: linear-gradient(135deg, #8c4f12, #c88627);
+  color: white;
+}
+
+.secondary,
+.chip {
+  background: rgba(111, 87, 35, 0.1);
+  color: #4d3710;
+}
+
+.hero .secondary {
+  background: rgba(255, 235, 196, 0.22);
+  color: #fff7e8;
+  border: 1px solid rgba(255, 235, 196, 0.35);
+}
+
+.hero .secondary:disabled {
+  background: rgba(255, 235, 196, 0.08);
+  color: rgba(255, 247, 232, 0.45);
+  border-color: rgba(255, 235, 196, 0.12);
+  cursor: not-allowed;
+}
+
+.chip.active {
+  background: rgba(200, 134, 39, 0.25);
+}
+
+.status,
+.feedback {
+  color: rgba(248, 243, 232, 0.84);
+}
+
+.status-block {
+  display: grid;
+  gap: 6px;
+}
+
+.status-label {
+  color: rgba(248, 243, 232, 0.76);
+  font-size: 0.92rem;
+}
+
+.feedback {
+  color: #5a4212;
+}
+
+.suggestion-card,
+.quiz-card,
+.result-box {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.graph-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.graph-node {
+  padding: 14px;
+  min-width: 150px;
+}
+
+.graph-node.media {
+  background: rgba(255, 236, 196, 0.9);
+}
+
+.graph-node.reflection {
+  background: rgba(244, 222, 198, 0.9);
+}
+
+.graph-node.concept {
+  background: rgba(229, 239, 209, 0.92);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .split,
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
