@@ -99,6 +99,32 @@ export type GraphSnapshot = {
   edges: GraphEdge[];
 };
 
+export type KnowledgeGraphNode = {
+  id: string;
+  title: string;
+  summary: string;
+  reflection?: string;
+  excerpt?: string;
+  domain?: string;
+  mediaType?: string;
+  score?: number;
+  concepts: string[];
+};
+
+export type KnowledgeGraphEdge = {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+  weight: number;
+  reasons: string[];
+};
+
+export type KnowledgeGraph = {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+};
+
 export type QuizQuestionType =
   | "summary_recall"
   | "why_saved"

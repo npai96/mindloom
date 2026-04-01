@@ -1,0 +1,11 @@
+fail-on-severity: moderate
+fail-on-scopes:
+  - runtime
+vulnerability-check: true
+license-check: false
+deny-packages:
+  - pkg:npm/axios@1.14.1
+  - pkg:npm/axios@0.30.4
+  - pkg:npm/plain-crypto-js
+  - pkg:pypi/telnyx@4.87.1
+  - pkg:pypi/telnyx@4.87.2

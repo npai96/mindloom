@@ -60,3 +60,11 @@ Then register the app in the Paradigm Developer Dashboard with:
 - Paradigm writes occur only on commit and concept approval, and only when the required environment variables are configured.
 - Reflection evaluation is implemented as a lightweight local rubric so the hard gate works without an external LLM dependency. This can be swapped for a model-backed evaluator later without changing the API contracts.
 - The SQLite integration uses Node's built-in `node:sqlite` module, which currently emits an experimental warning on test runs under Node 24.
+
+## PR security gates
+
+- `.github/workflows/dependency-review.yml` runs GitHub's official dependency review check on every pull request to `main`.
+- `.github/workflows/osv-scanner-pr.yml` runs OSV-Scanner on every pull request and merge queue evaluation for `main`.
+- `.github/dependency-review-config.yml` also explicitly blocks a small set of package/version combinations tied to recent supply-chain incidents, including `axios@1.14.1`, `axios@0.30.4`, `plain-crypto-js`, and the malicious `telnyx` PyPI releases `4.87.1` and `4.87.2`.
+- To turn these into true merge gates, add both checks as required status checks in your GitHub branch protection rules for `main`.
+- GitHub's dependency review action requires a public repository or GitHub Advanced Security on private repositories. OSV-Scanner does not have that limitation.

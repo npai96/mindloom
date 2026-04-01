@@ -23,6 +23,7 @@ import {
   generateReflectionPrompts,
   scoreQuizAnswer,
 } from "../services/reflection.js";
+import { buildKnowledgeGraph } from "../services/knowledge.js";
 import { createDraftRecord, store } from "../services/store.js";
 
 const env = getEnv();
@@ -810,6 +811,21 @@ appRouter.get("/graph", (req, res) => {
     return;
   }
   res.json(store.getGraph(sessionId));
+});
+
+appRouter.get("/knowledge-graph", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+
+  res.json(
+    buildKnowledgeGraph({
+      drafts: store.listDrafts(sessionId),
+      suggestions: store.listConceptSuggestions(sessionId),
+      graph: store.getGraph(sessionId),
+    }),
+  );
 });
 
 appRouter.get("/quiz/weekly", (req, res) => {

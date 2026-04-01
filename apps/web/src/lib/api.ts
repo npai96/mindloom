@@ -1,6 +1,7 @@
 import type {
   ConceptSuggestion,
   GraphSnapshot,
+  KnowledgeGraph,
   MediaDraft,
   MeResponse,
   QuizResult,
@@ -64,6 +65,7 @@ export const api = {
       body: JSON.stringify({ suggestionId }),
     }),
   getGraph: () => request<GraphSnapshot>("/graph"),
+  getKnowledgeGraph: () => request<KnowledgeGraph>("/knowledge-graph"),
   createWeeklyQuiz: () =>
     request<{
       sessionId: string;
