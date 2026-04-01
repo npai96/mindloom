@@ -409,6 +409,34 @@ textarea {
     linear-gradient(180deg, rgba(255, 252, 247, 0.95), rgba(247, 239, 223, 0.9));
 }
 
+.graph-empty-hint {
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  z-index: 1;
+  max-width: 280px;
+  border-radius: 14px;
+  border: 1px solid rgba(132, 101, 44, 0.12);
+  background: rgba(255, 252, 245, 0.88);
+  padding: 10px 12px;
+  box-shadow: 0 8px 18px rgba(104, 76, 22, 0.05);
+  pointer-events: none;
+}
+
+.graph-empty-hint strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #3f3010;
+  font-size: 0.88rem;
+}
+
+.graph-empty-hint p {
+  margin: 0;
+  color: rgba(89, 68, 20, 0.78);
+  line-height: 1.35;
+  font-size: 0.82rem;
+}
+
 .graph-lines {
   position: absolute;
   inset: 0;
@@ -577,6 +605,64 @@ textarea {
 .detail-section p {
   color: #3f3010;
   line-height: 1.45;
+}
+
+.linked-entry-list {
+  display: grid;
+  gap: 10px;
+}
+
+.linked-entry-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(132, 101, 44, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 252, 245, 0.82);
+  padding: 12px 14px;
+  color: #3f3010;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.linked-entry-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(161, 115, 40, 0.28);
+  box-shadow: 0 10px 20px rgba(104, 76, 22, 0.08);
+}
+
+.linked-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.linked-entry-header strong {
+  font-size: 0.98rem;
+}
+
+.linked-entry-header span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(111, 87, 35, 0.1);
+  color: rgba(89, 68, 20, 0.84);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.linked-entry-card p {
+  margin: 0;
+  color: rgba(89, 68, 20, 0.78);
+  font-size: 0.9rem;
 }
 
 @media (max-width: 1080px) {

@@ -22,7 +22,13 @@ type GraphDetail = {
   scoreLabel?: string;
   concepts: string[];
   sections: Array<{ label: string; content: string }>;
-  linkedLabels: string[];
+  linkedEntries: Array<{
+    id: string;
+    title: string;
+    label: string;
+    reasons: string[];
+    weight: number;
+  }>;
 };
 
 const initialMe: MeResponse = {
@@ -648,6 +654,12 @@ function GraphExplorer({
             className="graph-stage"
             style={{ width: `${stageWidth}px`, minHeight: `${stageHeight}px` }}
           >
+            {model.edges.length === 0 ? (
+              <div className="graph-empty-hint">
+                <strong>No strong links yet.</strong>
+                <p>More specific concepts will make the map denser.</p>
+              </div>
+            ) : null}
             <svg
               className="graph-lines"
               viewBox={`0 0 ${stageWidth} ${stageHeight}`}
@@ -747,14 +759,30 @@ function GraphExplorer({
                 </div>
               ))}
             </div>
-            {detail.linkedLabels.length > 0 ? (
+            {detail.linkedEntries.length > 0 ? (
               <div className="detail-section">
-                <small>Linked nodes</small>
-                <div className="detail-meta">
-                  {detail.linkedLabels.map((item) => (
-                    <span key={item} className="meta-chip">
-                      {item}
-                    </span>
+                <small>Why linked</small>
+                <div className="linked-entry-list">
+                  {detail.linkedEntries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className="linked-entry-card"
+                      onClick={() => onSelectNode(entry.id)}
+                    >
+                      <div className="linked-entry-header">
+                        <strong>{entry.title}</strong>
+                        <span>{Math.round(entry.weight * 100)}</span>
+                      </div>
+                      <p>{entry.label}</p>
+                      <div className="detail-meta">
+                        {entry.reasons.map((reason) => (
+                          <span key={reason} className="meta-chip">
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -886,13 +914,29 @@ function layoutKnowledgeGraph(model: KnowledgeGraph, viewportWidth: number) {
 }
 
 function resolveKnowledgeDetail(node: KnowledgeGraphNode, model: KnowledgeGraph): GraphDetail {
-  const linkedLabels = model.edges
+  const linkedEntries = model.edges
     .filter((edge) => edge.from === node.id || edge.to === node.id)
     .map((edge) => {
       const relatedId = edge.from === node.id ? edge.to : edge.from;
-      return model.nodes.find((candidate) => candidate.id === relatedId)?.title;
+      const relatedNode = model.nodes.find((candidate) => candidate.id === relatedId);
+      if (!relatedNode) {
+        return null;
+      }
+      return {
+        id: relatedNode.id,
+        title: relatedNode.title,
+        label: edge.label,
+        reasons: edge.reasons,
+        weight: edge.weight,
+      };
     })
-    .filter((label): label is string => Boolean(label));
+    .filter(
+      (
+        entry,
+      ): entry is { id: string; title: string; label: string; reasons: string[]; weight: number } =>
+        Boolean(entry),
+    )
+    .sort((left, right) => right.weight - left.weight);
 
   return {
     title: node.title,
@@ -905,7 +949,7 @@ function resolveKnowledgeDetail(node: KnowledgeGraphNode, model: KnowledgeGraph)
       section("Why it mattered", node.reflection),
       section("Captured notes", node.excerpt),
     ]),
-    linkedLabels,
+    linkedEntries,
   };
 }
 
