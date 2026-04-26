@@ -1,4 +1,5 @@
 import type {
+  ConceptSuggestion,
   MediaDraft,
   QuizQuestion,
   ReflectionEvaluation,
@@ -77,6 +78,31 @@ export function generateReflectionPrompts(preview: MediaDraft["preview"]): Refle
   }));
 }
 
+export function buildConceptSuggestionCandidate(
+  draft: MediaDraft,
+): Pick<ConceptSuggestion, "label" | "rationale" | "relatedConceptLabels"> {
+  const phrases = extractMeaningfulPhrases([
+    draft.preview.title,
+    draft.reflection,
+    draft.preview.excerpt,
+  ]);
+  const label = toTitleCase(
+    phrases[0] ??
+      fallbackConceptLabel(draft.preview.domain, draft.preview.mediaType),
+  );
+  const relatedConceptLabels = phrases
+    .filter((phrase) => normalizePhrase(phrase) !== normalizePhrase(label))
+    .slice(0, 2)
+    .map((phrase) => toTitleCase(phrase));
+
+  return {
+    label,
+    rationale: `This entry seems to orbit ${label.toLowerCase()} in a way worth revisiting later.`,
+    relatedConceptLabels:
+      relatedConceptLabels.length > 0 ? relatedConceptLabels : [toTitleCase(draft.preview.mediaType)],
+  };
+}
+
 export function buildQuizQuestions(
   drafts: MediaDraft[],
   repetitionScoreFor: (draftId: string) => number,
@@ -131,4 +157,141 @@ export function scoreQuizAnswer(question: QuizQuestion, answer: string) {
       ? "Nice recall. You retrieved enough detail to strengthen the memory."
       : "Try anchoring your answer to why it mattered, not just the source.",
   };
+}
+
+function extractMeaningfulPhrases(values: Array<string | undefined>) {
+  const text = values.filter(Boolean).join(" ");
+  if (!text.trim()) {
+    return [];
+  }
+
+  const normalized = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokens = normalized.split(" ").filter(Boolean);
+  const stopwords = new Set([
+    "about",
+    "after",
+    "article",
+    "because",
+    "being",
+    "caught",
+    "could",
+    "entry",
+    "essay",
+    "feel",
+    "from",
+    "have",
+    "idea",
+    "important",
+    "insight",
+    "into",
+    "item",
+    "just",
+    "made",
+    "manual",
+    "more",
+    "note",
+    "saved",
+    "systems",
+    "that",
+    "their",
+    "them",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "want",
+    "what",
+    "when",
+    "which",
+    "worth",
+    "would",
+    "your",
+  ]);
+
+  const phrases: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const first = singularizeToken(tokens[index]);
+    const second = tokens[index + 1] ? singularizeToken(tokens[index + 1]) : undefined;
+    if (
+      second &&
+      first.length >= 4 &&
+      second.length >= 4 &&
+      !stopwords.has(first) &&
+      !stopwords.has(second)
+    ) {
+      phrases.push(`${first} ${second}`);
+    }
+
+    if (first.length >= 5 && !stopwords.has(first)) {
+      phrases.push(first);
+    }
+  }
+
+  return Array.from(new Set(phrases))
+    .filter((phrase) => !isGenericConcept(phrase))
+    .slice(0, 4);
+}
+
+function fallbackConceptLabel(domain: string, mediaType: string) {
+  if (domain && domain !== "manual" && domain !== "unknown") {
+    return domain.split(".")[0] ?? mediaType;
+  }
+  return mediaType === "note" ? "Personal Reflection" : mediaType;
+}
+
+function isGenericConcept(value: string) {
+  return new Set([
+    "article",
+    "essay",
+    "idea",
+    "insight",
+    "manual",
+    "media",
+    "note",
+    "personal insight",
+    "reflection",
+    "saved",
+    "video",
+  ]).has(normalizePhrase(value));
+}
+
+function normalizePhrase(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function singularizeToken(value: string) {
+  if (value.length <= 4) {
+    return value;
+  }
+  if (value.endsWith("ous") || value.endsWith("us") || value.endsWith("is")) {
+    return value;
+  }
+  if (value.endsWith("ies")) {
+    return `${value.slice(0, -3)}y`;
+  }
+  if (value.endsWith("sses")) {
+    return value.slice(0, -2);
+  }
+  if (value.endsWith("s") && !value.endsWith("ss")) {
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => token[0]?.toUpperCase() + token.slice(1))
+    .join(" ");
 }

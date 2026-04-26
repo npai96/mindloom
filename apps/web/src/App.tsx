@@ -62,6 +62,7 @@ export default function App() {
   const [quiz, setQuiz] = useState<QuizSession | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -223,6 +224,7 @@ export default function App() {
       setQuiz(session);
       setQuizAnswers({});
       setQuizResult(null);
+      setCurrentQuizIndex(0);
       setStatus("Weekly recap ready.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to generate quiz.");
@@ -268,6 +270,16 @@ export default function App() {
   const graphDetail = selectedGraphNode
     ? resolveKnowledgeDetail(selectedGraphNode, knowledgeModel)
     : null;
+  const sortedSuggestions = [...suggestions].sort((left, right) => {
+    if (left.approved !== right.approved) {
+      return Number(left.approved) - Number(right.approved);
+    }
+    return left.label.localeCompare(right.label);
+  });
+  const activeQuizQuestion = quiz?.questions[currentQuizIndex] ?? null;
+  const answeredQuizCount = quiz
+    ? quiz.questions.filter((question) => (quizAnswers[question.id] ?? "").trim().length > 0).length
+    : 0;
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -539,25 +551,52 @@ export default function App() {
                   <p>Once reflections are saved, Mindloom will suggest concept threads here.</p>
                 </div>
               ) : null}
-              {suggestions.map((suggestion) => (
-                <div key={suggestion.id} className="suggestion-card">
-                  <div className="suggestion-topline">
-                    <strong>{suggestion.label}</strong>
-                    <span className="pill subtle-pill">
-                      {suggestion.approved ? "Approved" : "Pending"}
-                    </span>
+              {sortedSuggestions.map((suggestion) => {
+                const sourceDraft = drafts.find((draft) => draft.id === suggestion.sourceDraftId);
+                return (
+                  <div key={suggestion.id} className="suggestion-card">
+                    <div className="suggestion-topline">
+                      <div className="suggestion-heading">
+                        <strong>{suggestion.label}</strong>
+                        {sourceDraft ? <small>From {sourceDraft.preview.title}</small> : null}
+                      </div>
+                      <span className="pill subtle-pill">
+                        {suggestion.approved ? "Approved" : "Pending"}
+                      </span>
+                    </div>
+                    <p>{suggestion.rationale}</p>
+                    {suggestion.relatedConceptLabels.length > 0 ? (
+                      <div className="detail-meta">
+                        {suggestion.relatedConceptLabels.map((item) => (
+                          <span key={item} className="meta-chip">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="suggestion-actions">
+                      <button
+                        className="secondary"
+                        disabled={suggestion.approved}
+                        onClick={() => handleApproveSuggestion(suggestion.id)}
+                      >
+                        {suggestion.approved ? "Approved" : "Approve link"}
+                      </button>
+                      {sourceDraft && sourceDraft.status === "saved" ? (
+                        <button
+                          className="tertiary"
+                          onClick={() => {
+                            setKnowledgeTab("graph");
+                            setSelectedGraphNodeId(sourceDraft.id);
+                          }}
+                        >
+                          View entry
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                  <p>{suggestion.rationale}</p>
-                  <small>{suggestion.relatedConceptLabels.join(" · ")}</small>
-                  <button
-                    className="secondary"
-                    disabled={suggestion.approved}
-                    onClick={() => handleApproveSuggestion(suggestion.id)}
-                  >
-                    {suggestion.approved ? "Approved" : "Approve link"}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -576,36 +615,100 @@ export default function App() {
           </div>
 
           {quiz ? (
-            <div className="quiz-list">
-              {quiz.questions.map((question) => (
-                <div key={question.id} className="quiz-card">
-                  <strong>{question.prompt}</strong>
+            <div className="quiz-flow">
+              <div className="quiz-progress-row">
+                <div>
+                  <strong>
+                    Question {currentQuizIndex + 1} of {quiz.questions.length}
+                  </strong>
+                  <p className="subtle">
+                    {answeredQuizCount} answered so far. Short, specific recall beats perfect prose.
+                  </p>
+                </div>
+                <span className="pill subtle-pill">
+                  {activeQuizQuestion ? formatQuizType(activeQuizQuestion.type) : "Recap"}
+                </span>
+              </div>
+
+              {activeQuizQuestion ? (
+                <div className="quiz-card active">
+                  <small className="count-label">{activeQuizQuestion.itemTitle}</small>
+                  <strong>{activeQuizQuestion.prompt}</strong>
                   <textarea
-                    rows={4}
-                    value={quizAnswers[question.id] ?? ""}
+                    rows={6}
+                    value={quizAnswers[activeQuizQuestion.id] ?? ""}
                     onChange={(event) =>
                       setQuizAnswers((current) => ({
                         ...current,
-                        [question.id]: event.target.value,
+                        [activeQuizQuestion.id]: event.target.value,
                       }))
                     }
+                    placeholder="Write what you remember, why you saved it, or how it connects."
                   />
+                  <div className="quiz-actions">
+                    <button
+                      className="secondary"
+                      onClick={() => setCurrentQuizIndex((current) => Math.max(0, current - 1))}
+                      disabled={currentQuizIndex === 0}
+                    >
+                      Previous
+                    </button>
+                    <div className="quiz-actions-right">
+                      {currentQuizIndex < quiz.questions.length - 1 ? (
+                        <button
+                          className="secondary"
+                          onClick={() =>
+                            setCurrentQuizIndex((current) =>
+                              Math.min(quiz.questions.length - 1, current + 1),
+                            )
+                          }
+                        >
+                          Next question
+                        </button>
+                      ) : null}
+                      <button className="primary" onClick={handleSubmitQuiz}>
+                        Score recap
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ))}
-              <button className="secondary" onClick={handleSubmitQuiz}>
-                Score recap
-              </button>
+              ) : null}
             </div>
           ) : null}
 
           {quizResult ? (
-            <div className="result-box">
-              <strong>Score: {quizResult.score}</strong>
-              <p>
-                Reflection streak: {quizResult.streaks.reflectionDays} days. Weekly recaps:
-                {" "}
-                {quizResult.streaks.weeklyRecaps}.
-              </p>
+            <div className="quiz-result-stack">
+              <div className="result-box">
+                <strong>Score: {quizResult.score}</strong>
+                <p>
+                  Reflection streak: {quizResult.streaks.reflectionDays} days. Weekly recaps:
+                  {" "}
+                  {quizResult.streaks.weeklyRecaps}.
+                </p>
+              </div>
+              <div className="quiz-review-list">
+                {quizResult.questions.map((question, index) => (
+                  <div key={question.id} className="quiz-review-card">
+                    <div className="quiz-review-topline">
+                      <small>
+                        Question {index + 1} · {question.itemTitle}
+                      </small>
+                      <span className={`pill ${question.correct ? "success-pill" : "warning-pill"}`}>
+                        {question.correct ? "Strong recall" : "Needs another pass"}
+                      </span>
+                    </div>
+                    <strong>{question.prompt}</strong>
+                    <div className="detail-section">
+                      <small>Your answer</small>
+                      <p>{question.userAnswer || "No answer recorded."}</p>
+                    </div>
+                    <div className="detail-section">
+                      <small>Feedback</small>
+                      <p>{question.feedback}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </section>
@@ -627,6 +730,7 @@ function GraphExplorer({
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = useState(760);
+  const [browserQuery, setBrowserQuery] = useState("");
 
   useEffect(() => {
     const updateWidth = () => {
@@ -640,9 +744,68 @@ function GraphExplorer({
   }, []);
 
   const { positions, stageWidth, stageHeight } = layoutKnowledgeGraph(model, viewportWidth);
+  const filteredNodes = model.nodes
+    .filter((node) => {
+      const query = browserQuery.trim().toLowerCase();
+      if (!query) {
+        return true;
+      }
+      return [node.title, node.summary, node.concepts.join(" ")]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    })
+    .sort((left, right) => {
+      const leftDegree = model.edges.filter((edge) => edge.from === left.id || edge.to === left.id).length;
+      const rightDegree = model.edges.filter((edge) => edge.from === right.id || edge.to === right.id).length;
+      if (rightDegree !== leftDegree) {
+        return rightDegree - leftDegree;
+      }
+      return left.title.localeCompare(right.title);
+    });
 
   return (
     <div className="graph-explorer">
+      <aside className="graph-browser-panel">
+        <div className="graph-browser-copy">
+          <strong>Saved entries</strong>
+          <p>Browse what you have already reflected on and jump straight into the graph.</p>
+        </div>
+        <input
+          value={browserQuery}
+          onChange={(event) => setBrowserQuery(event.target.value)}
+          placeholder="Search titles, notes, or themes"
+        />
+        <div className="graph-browser-list">
+          {filteredNodes.map((node) => {
+            const connectionCount = model.edges.filter(
+              (edge) => edge.from === node.id || edge.to === node.id,
+            ).length;
+            const isSelected = node.id === selectedNodeId;
+            return (
+              <button
+                key={node.id}
+                type="button"
+                className={`graph-browser-item ${isSelected ? "active" : ""}`}
+                onClick={() => onSelectNode(node.id)}
+              >
+                <div className="graph-browser-topline">
+                  <strong>{node.title}</strong>
+                  {typeof node.score === "number" ? (
+                    <span>{Math.round(node.score * 100)}</span>
+                  ) : null}
+                </div>
+                <p>{truncateLabel(node.summary, 88)}</p>
+                <small>
+                  {connectionCount} link{connectionCount === 1 ? "" : "s"}
+                  {node.concepts.length > 0 ? ` · ${node.concepts.slice(0, 2).join(" · ")}` : ""}
+                </small>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
       <div className="graph-stage-card">
         <div className="graph-copy">
           <strong>Each node is a saved idea.</strong>
@@ -735,10 +898,18 @@ function GraphExplorer({
               <strong>{detail.title}</strong>
             </div>
             <p className="detail-summary">{detail.summary}</p>
+            <div className="detail-sections">
+              {detail.sections.map((section) => (
+                <div key={section.label} className="detail-section">
+                  <small>{section.label}</small>
+                  <p>{section.content}</p>
+                </div>
+              ))}
+            </div>
+            {detail.scoreLabel ? <p className="detail-score">{detail.scoreLabel}</p> : null}
             {detail.metaLine ? (
               <p className="detail-meta-line">{detail.metaLine}</p>
             ) : null}
-            {detail.scoreLabel ? <p className="detail-score">{detail.scoreLabel}</p> : null}
             {detail.concepts.length > 0 ? (
               <div className="detail-section">
                 <small>Shared themes</small>
@@ -751,14 +922,6 @@ function GraphExplorer({
                 </div>
               </div>
             ) : null}
-            <div className="detail-sections">
-              {detail.sections.map((section) => (
-                <div key={section.label} className="detail-section">
-                  <small>{section.label}</small>
-                  <p>{section.content}</p>
-                </div>
-              ))}
-            </div>
             {detail.linkedEntries.length > 0 ? (
               <div className="detail-section">
                 <small>Why linked</small>
@@ -940,14 +1103,13 @@ function resolveKnowledgeDetail(node: KnowledgeGraphNode, model: KnowledgeGraph)
 
   return {
     title: node.title,
-    summary: node.summary,
+    summary: node.excerpt || "No source notes captured yet.",
     metaLine: compact([node.domain, node.mediaType, "saved"]).join(" · "),
     scoreLabel:
       typeof node.score === "number" ? `Reflection score ${Math.round(node.score * 100)}/100` : undefined,
     concepts: node.concepts,
     sections: compactSections([
       section("Why it mattered", node.reflection),
-      section("Captured notes", node.excerpt),
     ]),
     linkedEntries,
   };
@@ -981,4 +1143,17 @@ function compactSections(
   sections: Array<{ label: string; content: string } | undefined>,
 ): Array<{ label: string; content: string }> {
   return sections.filter((item): item is { label: string; content: string } => Boolean(item));
+}
+
+function formatQuizType(value: string) {
+  switch (value) {
+    case "summary_recall":
+      return "Summary recall";
+    case "why_saved":
+      return "Why saved";
+    case "concept_match":
+      return "Concept match";
+    default:
+      return "Recap";
+  }
 }

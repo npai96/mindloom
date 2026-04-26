@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateReflection } from "./services/reflection.js";
+import { buildConceptSuggestionCandidate, evaluateReflection } from "./services/reflection.js";
 
 test("evaluateReflection accepts thoughtful reflections", () => {
   const result = evaluateReflection(
@@ -17,4 +17,25 @@ test("evaluateReflection rejects shallow summaries", () => {
 
   assert.equal(result.accepted, false);
   assert.match(result.feedback, /why this matters to you/i);
+});
+
+test("buildConceptSuggestionCandidate derives a specific concept from reflection text", () => {
+  const candidate = buildConceptSuggestionCandidate({
+    id: "draft-1",
+    status: "saved",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    preview: {
+      title: "Love and the nervous system",
+      excerpt: "A note about physiology and relationships.",
+      domain: "manual",
+      mediaType: "note",
+    },
+    reflection:
+      "This matters because my nervous system gives me a better signal than my stories when I am deciding whether someone feels safe.",
+    evaluation: undefined,
+  });
+
+  assert.match(candidate.label, /Nervous System|Feel Safe|Safe Signal/i);
+  assert.ok(candidate.relatedConceptLabels.length >= 1);
 });

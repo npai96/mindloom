@@ -18,6 +18,7 @@ import { getEnv } from "../lib/env.js";
 import { readJson, sendError } from "../lib/http.js";
 import { ParadigmClient } from "../services/paradigm.js";
 import {
+  buildConceptSuggestionCandidate,
   buildQuizQuestions,
   evaluateReflection,
   generateReflectionPrompts,
@@ -726,16 +727,14 @@ appRouter.get("/concepts/suggestions", (req, res) => {
           if (store.listConceptSuggestions(sessionId).some((item) => item.sourceDraftId === draft.id)) {
             return [];
           }
-          const label = draft.preview.domain === "manual"
-            ? "Personal insight"
-            : draft.preview.domain.split(".")[0];
+          const candidate = buildConceptSuggestionCandidate(draft);
           const suggestion: ConceptSuggestion = {
             id: randomUUID(),
-            label,
-            rationale: `This item keeps a durable thread around ${label}.`,
+            label: candidate.label,
+            rationale: candidate.rationale,
             sourceDraftId: draft.id,
             approved: false,
-            relatedConceptLabels: [draft.preview.mediaType, "curiosity"],
+            relatedConceptLabels: candidate.relatedConceptLabels,
           };
           store.saveConceptSuggestion(suggestion);
           return [suggestion];
