@@ -31,6 +31,12 @@ type GraphDetail = {
   }>;
 };
 
+type SuggestionEdit = {
+  label: string;
+  rationale: string;
+  relatedConceptLabels: string;
+};
+
 const initialMe: MeResponse = {
   connected: false,
   permissions: {},
@@ -75,6 +81,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [knowledgeTab, setKnowledgeTab] = useState<KnowledgeTab>("graph");
   const [entryTab, setEntryTab] = useState<EntryTab>("capture");
+  const [suggestionEdits, setSuggestionEdits] = useState<Record<string, SuggestionEdit>>({});
 
   const activeDrafts = useMemo(
     () => drafts.filter((draft) => draft.status !== "saved"),
@@ -146,6 +153,20 @@ export default function App() {
     }
   }, [knowledgeModel.nodes, selectedGraphNodeId]);
 
+  useEffect(() => {
+    setSuggestionEdits((current) => {
+      const next = { ...current };
+      suggestions.forEach((suggestion) => {
+        next[suggestion.id] ??= {
+          label: suggestion.label,
+          rationale: suggestion.rationale,
+          relatedConceptLabels: suggestion.relatedConceptLabels.join(", "),
+        };
+      });
+      return next;
+    });
+  }, [suggestions]);
+
   async function handleConnect() {
     try {
       const result = await api.startAuth();
@@ -209,12 +230,48 @@ export default function App() {
 
   async function handleApproveSuggestion(suggestionId: string) {
     try {
+      const suggestion = suggestions.find((item) => item.id === suggestionId);
+      const edit = suggestionEdits[suggestionId];
+      if (
+        suggestion &&
+        edit &&
+        (edit.label.trim() !== suggestion.label ||
+          edit.rationale.trim() !== suggestion.rationale ||
+          normalizeRelatedLabels(edit.relatedConceptLabels).join("|") !==
+            suggestion.relatedConceptLabels.join("|"))
+      ) {
+        await api.updateConceptSuggestion({
+          suggestionId,
+          label: edit.label.trim(),
+          rationale: edit.rationale.trim(),
+          relatedConceptLabels: normalizeRelatedLabels(edit.relatedConceptLabels),
+        });
+      }
       await api.approveConceptSuggestion(suggestionId);
       setStatus("Concept approved and linked.");
       await refreshCore();
       setKnowledgeTab("graph");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to approve concept.");
+    }
+  }
+
+  async function handleSaveSuggestionEdit(suggestionId: string) {
+    const edit = suggestionEdits[suggestionId];
+    if (!edit) {
+      return;
+    }
+    try {
+      await api.updateConceptSuggestion({
+        suggestionId,
+        label: edit.label.trim(),
+        rationale: edit.rationale.trim(),
+        relatedConceptLabels: normalizeRelatedLabels(edit.relatedConceptLabels),
+      });
+      setStatus("Suggestion updated.");
+      await refreshCore();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to update suggestion.");
     }
   }
 
@@ -553,28 +610,120 @@ export default function App() {
               ) : null}
               {sortedSuggestions.map((suggestion) => {
                 const sourceDraft = drafts.find((draft) => draft.id === suggestion.sourceDraftId);
+                const edit = suggestionEdits[suggestion.id] ?? {
+                  label: suggestion.label,
+                  rationale: suggestion.rationale,
+                  relatedConceptLabels: suggestion.relatedConceptLabels.join(", "),
+                };
+                const nearbyThemes = suggestion.approved
+                  ? []
+                  : findNearbyApprovedThemes(suggestion, edit.label, suggestions);
                 return (
                   <div key={suggestion.id} className="suggestion-card">
                     <div className="suggestion-topline">
                       <div className="suggestion-heading">
-                        <strong>{suggestion.label}</strong>
+                        {suggestion.approved ? (
+                          <strong>{suggestion.label}</strong>
+                        ) : (
+                          <input
+                            value={edit.label}
+                            onChange={(event) =>
+                              setSuggestionEdits((current) => ({
+                                ...current,
+                                [suggestion.id]: {
+                                  ...edit,
+                                  label: event.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Theme name"
+                          />
+                        )}
                         {sourceDraft ? <small>From {sourceDraft.preview.title}</small> : null}
                       </div>
                       <span className="pill subtle-pill">
                         {suggestion.approved ? "Approved" : "Pending"}
                       </span>
                     </div>
-                    <p>{suggestion.rationale}</p>
-                    {suggestion.relatedConceptLabels.length > 0 ? (
-                      <div className="detail-meta">
-                        {suggestion.relatedConceptLabels.map((item) => (
-                          <span key={item} className="meta-chip">
-                            {item}
-                          </span>
-                        ))}
+                    {suggestion.approved ? (
+                      <p>{suggestion.rationale}</p>
+                    ) : (
+                      <textarea
+                        rows={3}
+                        value={edit.rationale}
+                        onChange={(event) =>
+                          setSuggestionEdits((current) => ({
+                            ...current,
+                            [suggestion.id]: {
+                              ...edit,
+                              rationale: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Why does this concept fit this entry?"
+                      />
+                    )}
+                    {suggestion.approved ? (
+                      suggestion.relatedConceptLabels.length > 0 ? (
+                        <div className="detail-meta">
+                          {suggestion.relatedConceptLabels.map((item) => (
+                            <span key={item} className="meta-chip">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null
+                    ) : (
+                      <input
+                        value={edit.relatedConceptLabels}
+                        onChange={(event) =>
+                          setSuggestionEdits((current) => ({
+                            ...current,
+                            [suggestion.id]: {
+                              ...edit,
+                              relatedConceptLabels: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Supporting themes, separated by commas"
+                      />
+                    )}
+                    {suggestion.approved ? null : (
+                      <small className="subtle">Supporting themes help the graph explain itself later.</small>
+                    )}
+                    {nearbyThemes.length > 0 ? (
+                      <div className="nearby-theme-list">
+                        <small>Reuse existing theme</small>
+                        <div className="detail-meta">
+                          {nearbyThemes.map((theme) => (
+                            <button
+                              key={theme}
+                              className="meta-chip theme-button"
+                              onClick={() =>
+                                setSuggestionEdits((current) => ({
+                                  ...current,
+                                  [suggestion.id]: {
+                                    ...edit,
+                                    label: theme,
+                                  },
+                                }))
+                              }
+                            >
+                              {theme}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                     <div className="suggestion-actions">
+                      {!suggestion.approved ? (
+                        <button
+                          className="tertiary"
+                          onClick={() => handleSaveSuggestionEdit(suggestion.id)}
+                        >
+                          Save edits
+                        </button>
+                      ) : null}
                       <button
                         className="secondary"
                         disabled={suggestion.approved}
@@ -1156,4 +1305,50 @@ function formatQuizType(value: string) {
     default:
       return "Recap";
   }
+}
+
+function normalizeRelatedLabels(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function findNearbyApprovedThemes(
+  suggestion: ConceptSuggestion,
+  label: string,
+  suggestions: ConceptSuggestion[],
+) {
+  const candidateKey = normalizeThemeKey(label);
+  const candidateTokens = new Set(candidateKey.split(" ").filter((token) => token.length > 3));
+  return Array.from(
+    new Set(
+      suggestions
+        .filter((item) => item.approved && item.id !== suggestion.id)
+        .map((item) => item.label)
+        .filter((theme) => {
+          const themeKey = normalizeThemeKey(theme);
+          if (!themeKey || !candidateKey) {
+            return false;
+          }
+          if (themeKey === candidateKey) {
+            return true;
+          }
+          if (themeKey.includes(candidateKey) || candidateKey.includes(themeKey)) {
+            return true;
+          }
+          return themeKey
+            .split(" ")
+            .some((token) => token.length > 3 && candidateTokens.has(token));
+        }),
+    ),
+  ).slice(0, 3);
+}
+
+function normalizeThemeKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

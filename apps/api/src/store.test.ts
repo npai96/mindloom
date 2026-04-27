@@ -70,3 +70,50 @@ test("store tracks commits and concept approvals", () => {
   assert.equal(store.listConceptSuggestions("session-b")[0]?.approved, true);
   assert.equal(store.getSavedArtifact("draft-2")?.mediaNodeId, "media-1");
 });
+
+test("store updates editable concept suggestions before approval", () => {
+  store.createSession("session-c");
+  store.createDraft(
+    createDraftRecord("session-c", {
+      id: "draft-3",
+      status: "saved",
+      preview: {
+        title: "A saved note",
+        excerpt: "Excerpt",
+        domain: "manual",
+        mediaType: "note",
+      },
+    }),
+  );
+
+  store.saveConceptSuggestion({
+    id: "concept-suggestion-2",
+    label: "Personal insight",
+    rationale: "Initial rationale",
+    sourceDraftId: "draft-3",
+    approved: false,
+    relatedConceptLabels: ["note"],
+  });
+
+  const updated = store.updateConceptSuggestion("concept-suggestion-2", "session-c", {
+    label: "Nervous System Safety",
+    rationale: "A sharper theme worth keeping.",
+    relatedConceptLabels: ["physiology", "relationship"],
+  });
+
+  assert.equal(updated?.label, "Nervous System Safety");
+  assert.equal(updated?.rationale, "A sharper theme worth keeping.");
+  assert.deepEqual(updated?.relatedConceptLabels, ["physiology", "relationship"]);
+});
+
+test("store can find existing concept nodes by label", () => {
+  store.addGraphNode({
+    id: "concept-node-1",
+    label: "Nervous System Safety",
+    kind: "concept",
+  });
+
+  const existing = store.findConceptNodeByLabel("nervous system safety");
+
+  assert.equal(existing?.id, "concept-node-1");
+});

@@ -343,6 +343,11 @@ const approveConceptSuggestionStmt = db.prepare(`
   SET approved = 1
   WHERE id = ?
 `);
+const updateConceptSuggestionStmt = db.prepare(`
+  UPDATE concept_suggestions
+  SET label = ?, rationale = ?, related_concept_labels_json = ?
+  WHERE id = ?
+`);
 const upsertGraphNodeStmt = db.prepare(`
   INSERT INTO graph_nodes (id, label, kind)
   VALUES (?, ?, ?)
@@ -363,6 +368,12 @@ const allGraphNodesStmt = db.prepare(`SELECT id, label, kind FROM graph_nodes`);
 const allGraphEdgesStmt = db.prepare(`
   SELECT id, from_node_id, to_node_id, type, context
   FROM graph_edges
+`);
+const findConceptNodeByLowerLabelStmt = db.prepare(`
+  SELECT id, label, kind
+  FROM graph_nodes
+  WHERE kind = 'concept' AND lower(label) = ?
+  LIMIT 1
 `);
 const deleteGraphNodeStmt = db.prepare(`
   DELETE FROM graph_nodes
@@ -574,11 +585,45 @@ export const store = {
     approveConceptSuggestionStmt.run(id);
     return { ...suggestion, approved: true };
   },
+  updateConceptSuggestion(
+    id: string,
+    sessionId: string,
+    updates: Pick<ConceptSuggestion, "label" | "rationale" | "relatedConceptLabels">,
+  ) {
+    const suggestionRow = getConceptSuggestionStmt.get(id) as Record<string, unknown> | undefined;
+    if (!suggestionRow) {
+      return undefined;
+    }
+    const suggestion = mapConceptSuggestion(suggestionRow);
+    const draft = this.getDraft(suggestion.sourceDraftId, sessionId);
+    if (!draft) {
+      return undefined;
+    }
+    const updated = {
+      ...suggestion,
+      label: updates.label,
+      rationale: updates.rationale,
+      relatedConceptLabels: updates.relatedConceptLabels,
+    };
+    updateConceptSuggestionStmt.run(
+      updated.label,
+      updated.rationale,
+      serializeJson(updated.relatedConceptLabels),
+      id,
+    );
+    return updated;
+  },
   addGraphNode(node: GraphNode) {
     upsertGraphNodeStmt.run(node.id, node.label, node.kind);
   },
   addGraphEdge(edge: GraphEdge) {
     upsertGraphEdgeStmt.run(edge.id, edge.from, edge.to, edge.type, edge.context ?? null);
+  },
+  findConceptNodeByLabel(label: string) {
+    const row = findConceptNodeByLowerLabelStmt.get(
+      label.trim().toLowerCase(),
+    ) as Record<string, unknown> | undefined;
+    return row ? mapGraphNode(row) : undefined;
   },
   getGraph(sessionId: string) {
     const ownedDraftIds = new Set(this.listDrafts(sessionId).map((draft) => draft.id));

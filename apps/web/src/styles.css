@@ -721,6 +721,15 @@ textarea {
   line-height: 1.2;
 }
 
+.theme-button {
+  border: none;
+  cursor: pointer;
+}
+
+.theme-button:hover {
+  background: rgba(111, 87, 35, 0.16);
+}
+
 .detail-section {
   display: grid;
   gap: 4px;
@@ -807,6 +816,20 @@ textarea {
 }
 
 .suggestion-heading small {
+  color: rgba(89, 68, 20, 0.6);
+}
+
+.suggestion-card input,
+.suggestion-card textarea {
+  background: rgba(255, 252, 247, 0.92);
+}
+
+.nearby-theme-list {
+  display: grid;
+  gap: 6px;
+}
+
+.nearby-theme-list small {
   color: rgba(89, 68, 20, 0.6);
 }
 

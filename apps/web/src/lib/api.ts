@@ -59,6 +59,16 @@ export const api = {
     }),
   listConceptSuggestions: () =>
     request<{ suggestions: ConceptSuggestion[] }>("/concepts/suggestions"),
+  updateConceptSuggestion: (payload: {
+    suggestionId: string;
+    label: string;
+    rationale: string;
+    relatedConceptLabels: string[];
+  }) =>
+    request<{ suggestion: ConceptSuggestion }>("/concepts/update", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   approveConceptSuggestion: (suggestionId: string) =>
     request("/concepts/approve", {
       method: "POST",

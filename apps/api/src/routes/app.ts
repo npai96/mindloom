@@ -755,11 +755,12 @@ appRouter.post("/concepts/approve", async (req, res) => {
   }
 
   const session = store.getSession(sessionId);
-  let conceptNodeId = `concept-${suggestion.id}`;
+  const existingConceptNode = store.findConceptNodeByLabel(suggestion.label);
+  let conceptNodeId = existingConceptNode?.id ?? `concept-${suggestion.id}`;
 
   if (env.paradigmEnabled && session?.userId) {
     try {
-      if (canCreateNodes(session.permissions)) {
+      if (!existingConceptNode && canCreateNodes(session.permissions)) {
         const conceptNode = (await paradigm.createNode(session.userId, {
           title: suggestion.label,
           schema_uri: schemaUris.conceptNode,
@@ -771,15 +772,17 @@ appRouter.post("/concepts/approve", async (req, res) => {
           },
         })) as { id: string };
         conceptNodeId = conceptNode.id;
-        const saved = store.getSavedArtifact(suggestion.sourceDraftId);
-        if (saved && canCreateRelationships(session.permissions)) {
-          await paradigm.createRelationship(session.userId, {
-            from_node_id: saved.mediaNodeId,
-            to_node_id: conceptNodeId,
-            relationship_type: relationshipTypes.aboutConcept,
-            context: suggestion.rationale,
-          });
-        }
+      }
+
+      const saved = store.getSavedArtifact(suggestion.sourceDraftId);
+      const conceptExistsInParadigm = !conceptNodeId.startsWith("concept-");
+      if (saved && conceptExistsInParadigm && canCreateRelationships(session.permissions)) {
+        await paradigm.createRelationship(session.userId, {
+          from_node_id: saved.mediaNodeId,
+          to_node_id: conceptNodeId,
+          relationship_type: relationshipTypes.aboutConcept,
+          context: suggestion.rationale,
+        });
       }
     } catch (error) {
       return sendError(res, 502, "Failed to persist approved concept to Paradigm.", {
@@ -802,6 +805,30 @@ appRouter.post("/concepts/approve", async (req, res) => {
   });
   store.attachConceptNode(suggestion.sourceDraftId, conceptNodeId);
   res.json({ suggestion: { ...suggestion, approved: true }, conceptNodeId });
+});
+
+appRouter.post("/concepts/update", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const body = readJson<{
+    suggestionId: string;
+    label: string;
+    rationale: string;
+    relatedConceptLabels: string[];
+  }>(req);
+  const updated = store.updateConceptSuggestion(body.suggestionId, sessionId, {
+    label: body.label.trim(),
+    rationale: body.rationale.trim(),
+    relatedConceptLabels: body.relatedConceptLabels
+      .map((item) => item.trim())
+      .filter(Boolean),
+  });
+  if (!updated) {
+    return sendError(res, 404, "Suggestion not found.");
+  }
+  res.json({ suggestion: updated });
 });
 
 appRouter.get("/graph", (req, res) => {
