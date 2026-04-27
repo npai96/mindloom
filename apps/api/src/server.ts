@@ -6,6 +6,7 @@ import express from "express";
 import { getEnv } from "./lib/env.js";
 import { parseCookies } from "./lib/http.js";
 import { appRouter } from "./routes/app.js";
+import { mediaAssetsDir } from "./services/mediaAssets.js";
 import { store } from "./services/store.js";
 
 const env = getEnv();
@@ -23,7 +24,8 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
+app.use("/media-assets", express.static(mediaAssetsDir));
 
 app.use((req, res, next) => {
   const cookies = parseCookies(req);

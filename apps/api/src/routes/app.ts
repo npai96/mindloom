@@ -26,6 +26,7 @@ import {
   scoreQuizAnswer,
 } from "../services/reflection.js";
 import { buildKnowledgeGraph } from "../services/knowledge.js";
+import { persistImageAsset } from "../services/mediaAssets.js";
 import { createDraftRecord, store } from "../services/store.js";
 
 const env = getEnv();
@@ -125,6 +126,10 @@ function toPreviewFromMediaNode(node: ParadigmNode): MediaDraft["preview"] {
         : typeof value.mediatype === "string"
           ? (value.mediatype.toLowerCase() as MediaDraft["preview"]["mediaType"])
         : "article",
+    imageAsset:
+      value.imageasset && typeof value.imageasset === "object"
+        ? (value.imageasset as MediaDraft["preview"]["imageAsset"])
+        : undefined,
   };
 }
 
@@ -522,11 +527,26 @@ appRouter.post("/media/preview", (req, res) => {
   if (!sessionId) {
     return;
   }
-  const body = readJson<{ url?: string; title?: string; notes?: string }>(req);
+  const body = readJson<{ url?: string; title?: string; notes?: string; imageAssetId?: string }>(req);
   const source = body.url?.trim();
+  const imageAsset = body.imageAssetId
+    ? store.getMediaAsset(body.imageAssetId, sessionId)
+    : undefined;
+
+  if (body.imageAssetId && !imageAsset) {
+    return sendError(res, 404, "Image asset not found.");
+  }
 
   let preview;
-  if (source) {
+  if (imageAsset) {
+    preview = {
+      title: body.title?.trim() || imageAsset.altText || "Untitled image",
+      excerpt: body.notes?.trim() || imageAsset.altText || "Image saved for reflection.",
+      domain: "uploaded-image",
+      mediaType: "image" as const,
+      imageAsset,
+    };
+  } else if (source) {
     let parsed: URL;
     try {
       parsed = new URL(source);
@@ -559,6 +579,36 @@ appRouter.post("/media/preview", (req, res) => {
   );
 
   res.status(201).json(draft);
+});
+
+appRouter.post("/media/assets", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const body = readJson<{
+    dataUrl: string;
+    filename?: string;
+    altText?: string;
+  }>(req);
+  try {
+    const origin = `${req.protocol}://${req.get("host") ?? `localhost:${env.port}`}`;
+    const asset = persistImageAsset({
+      dataUrl: body.dataUrl,
+      originalFilename: body.filename,
+      altText: body.altText,
+      apiOrigin: origin,
+    });
+    store.saveMediaAsset(sessionId, asset);
+    res.status(201).json({ asset });
+  } catch (error) {
+    res.status(400).json({
+      error: {
+        code: "BAD_IMAGE_UPLOAD",
+        message: error instanceof Error ? error.message : "Failed to upload image.",
+      },
+    });
+  }
 });
 
 appRouter.get("/media/drafts", (req, res) => {
@@ -642,8 +692,12 @@ appRouter.post("/media/commit", async (req, res) => {
         const mediaNode = (await paradigm.createNode(session.userId, {
           title: draft.preview.title,
           schema_uri: schemaUris.mediaItem,
-          content_type: "text",
-          source_type: draft.preview.url ? "web" : "manual",
+          content_type: draft.preview.mediaType === "image" ? "image" : "text",
+          source_type: draft.preview.url
+            ? "web"
+            : draft.preview.mediaType === "image"
+              ? "upload"
+              : "manual",
           content_timestamp: now,
           value_json: {
             url: draft.preview.url,
@@ -651,6 +705,7 @@ appRouter.post("/media/commit", async (req, res) => {
             domain: draft.preview.domain,
             mediatype: draft.preview.mediaType,
             author: draft.preview.author,
+            imageasset: draft.preview.imageAsset,
             capturedat: now,
           },
         })) as { id: string };

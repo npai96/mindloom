@@ -44,6 +44,18 @@ export type ReflectionPrompt = {
   prompt: string;
 };
 
+export type MediaAsset = {
+  id: string;
+  kind: "image";
+  filename: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+  byteSize: number;
+  url: string;
+  altText?: string;
+  visionSummary?: string;
+  createdAt: string;
+};
+
 export type MediaPreview = {
   url?: string;
   title: string;
@@ -51,6 +63,7 @@ export type MediaPreview = {
   domain: string;
   author?: string;
   mediaType: "article" | "video" | "podcast" | "tweet" | "image" | "note";
+  imageAsset?: MediaAsset;
 };
 
 export type MediaDraft = {
@@ -115,6 +128,7 @@ export type KnowledgeGraphNode = {
   summary: string;
   reflection?: string;
   excerpt?: string;
+  imageAsset?: MediaAsset;
   domain?: string;
   mediaType?: string;
   score?: number;

@@ -107,6 +107,7 @@ export function buildKnowledgeGraph({
       summary: draft.reflection || draft.preview.excerpt || "Imported from Paradigm.",
       reflection: draft.reflection,
       excerpt: draft.preview.excerpt,
+      imageAsset: draft.preview.imageAsset,
       domain: draft.preview.domain,
       mediaType: draft.preview.mediaType,
       score: draft.evaluation?.score,

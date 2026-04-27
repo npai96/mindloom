@@ -180,6 +180,72 @@ textarea {
   color: inherit;
 }
 
+.image-upload-box {
+  display: grid;
+  gap: 4px;
+  border-radius: 18px;
+  border: 1px dashed rgba(89, 68, 20, 0.24);
+  background: rgba(255, 252, 247, 0.72);
+  padding: 14px;
+  cursor: pointer;
+}
+
+.image-upload-box span {
+  font-weight: 700;
+}
+
+.image-upload-box small {
+  color: rgba(89, 68, 20, 0.62);
+}
+
+.image-upload-box input {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.image-asset-preview {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-radius: 18px;
+  border: 1px solid rgba(89, 68, 20, 0.12);
+  background: rgba(255, 252, 247, 0.84);
+  padding: 10px;
+}
+
+.image-asset-preview img,
+.draft-thumb,
+.selected-draft-image,
+.detail-image {
+  object-fit: cover;
+  background: rgba(111, 87, 35, 0.08);
+}
+
+.image-asset-preview img {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+}
+
+.image-asset-preview div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.image-asset-preview strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-asset-preview small {
+  color: rgba(89, 68, 20, 0.62);
+}
+
 .draft-card {
   text-align: left;
   padding: 14px;
@@ -193,6 +259,12 @@ textarea {
 
 .draft-title {
   font-weight: 700;
+}
+
+.draft-thumb {
+  width: 100%;
+  height: 92px;
+  border-radius: 14px;
 }
 
 .entry-panel {
@@ -234,6 +306,12 @@ textarea {
   padding: 14px 16px;
   display: grid;
   gap: 6px;
+}
+
+.selected-draft-image {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 18px;
 }
 
 .actions,
@@ -749,6 +827,12 @@ textarea {
   color: #4c3811;
   line-height: 1.45;
   margin: 0;
+}
+
+.detail-image {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 18px;
 }
 
 .detail-meta-line,

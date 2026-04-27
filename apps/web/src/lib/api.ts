@@ -3,6 +3,7 @@ import type {
   GraphEdgeCandidate,
   GraphSnapshot,
   KnowledgeGraph,
+  MediaAsset,
   MediaDraft,
   MeResponse,
   QuizResult,
@@ -37,8 +38,13 @@ export const api = {
     request<{ ok: boolean; importedDrafts: number; cursor?: string }>("/sync", {
       method: "POST",
     }),
-  createPreview: (payload: { url?: string; title?: string; notes?: string }) =>
+  createPreview: (payload: { url?: string; title?: string; notes?: string; imageAssetId?: string }) =>
     request<MediaDraft>("/media/preview", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  uploadImageAsset: (payload: { dataUrl: string; filename?: string; altText?: string }) =>
+    request<{ asset: MediaAsset }>("/media/assets", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

@@ -10,6 +10,7 @@ import type {
   GraphEdge,
   GraphEdgeCandidate,
   GraphNode,
+  MediaAsset,
   MediaDraft,
   ParadigmNodePayload,
   QuizAnsweredQuestion,
@@ -88,6 +89,23 @@ db.exec(`
     reflection_node_id TEXT NOT NULL,
     concept_node_ids_json TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS media_assets (
+    id TEXT PRIMARY KEY,
+    owner_session_id TEXT NOT NULL,
+    owner_user_id TEXT,
+    kind TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    byte_size INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    alt_text TEXT,
+    vision_summary TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_media_assets_owner_session_id
+    ON media_assets (owner_session_id, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS concept_suggestions (
     id TEXT PRIMARY KEY,
@@ -281,6 +299,20 @@ function mapEdgeCandidate(row: Record<string, unknown>): GraphEdgeCandidate {
   };
 }
 
+function mapMediaAsset(row: Record<string, unknown>): MediaAsset {
+  return {
+    id: String(row.id),
+    kind: "image",
+    filename: String(row.filename),
+    mimeType: row.mime_type as MediaAsset["mimeType"],
+    byteSize: Number(row.byte_size),
+    url: String(row.url),
+    altText: row.alt_text ? String(row.alt_text) : undefined,
+    visionSummary: row.vision_summary ? String(row.vision_summary) : undefined,
+    createdAt: String(row.created_at),
+  };
+}
+
 function mapQuiz(row: Record<string, unknown>): QuizState {
   return {
     sessionId: String(row.session_id),
@@ -351,6 +383,18 @@ const upsertSavedArtifactStmt = db.prepare(`
     media_node_id = excluded.media_node_id,
     reflection_node_id = excluded.reflection_node_id,
     concept_node_ids_json = excluded.concept_node_ids_json
+`);
+const insertMediaAssetStmt = db.prepare(`
+  INSERT INTO media_assets (
+    id, owner_session_id, owner_user_id, kind, filename, mime_type, byte_size, url,
+    alt_text, vision_summary, created_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const getMediaAssetStmt = db.prepare(`
+  SELECT *
+  FROM media_assets
+  WHERE id = ? AND (owner_session_id = ? OR owner_user_id = ?)
 `);
 const getSavedArtifactStmt = db.prepare(`
   SELECT draft_id, media_node_id, reflection_node_id, concept_node_ids_json
@@ -633,6 +677,32 @@ export const store = {
     );
     this.markReflectionDay(sessionId, committed.savedAt);
     return updated;
+  },
+  saveMediaAsset(sessionId: string, asset: MediaAsset, ownerUserId?: string) {
+    const resolvedOwnerUserId = ownerUserId ?? this.getSession(sessionId)?.userId;
+    insertMediaAssetStmt.run(
+      asset.id,
+      sessionId,
+      resolvedOwnerUserId ?? null,
+      asset.kind,
+      asset.filename,
+      asset.mimeType,
+      asset.byteSize,
+      asset.url,
+      asset.altText ?? null,
+      asset.visionSummary ?? null,
+      asset.createdAt,
+    );
+    return asset;
+  },
+  getMediaAsset(assetId: string, sessionId: string) {
+    const session = this.getSession(sessionId);
+    const row = getMediaAssetStmt.get(
+      assetId,
+      sessionId,
+      session?.userId ?? null,
+    ) as Record<string, unknown> | undefined;
+    return row ? mapMediaAsset(row) : undefined;
   },
   saveConceptSuggestion(suggestion: ConceptSuggestion) {
     insertConceptSuggestionStmt.run(

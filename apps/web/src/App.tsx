@@ -5,6 +5,7 @@ import type {
   GraphEdgeCandidate,
   KnowledgeGraph,
   KnowledgeGraphNode,
+  MediaAsset,
   MediaDraft,
   MeResponse,
   QuizResult,
@@ -19,6 +20,7 @@ type EntryTab = "capture" | "reflect";
 type GraphDetail = {
   title: string;
   summary: string;
+  imageAsset?: MediaAsset;
   metaLine?: string;
   scoreLabel?: string;
   concepts: string[];
@@ -84,6 +86,7 @@ export default function App() {
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [imageAsset, setImageAsset] = useState<MediaAsset | null>(null);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
   const [reflection, setReflection] = useState("");
@@ -198,10 +201,12 @@ export default function App() {
         url: url || undefined,
         title: title || undefined,
         notes: notes || undefined,
+        imageAssetId: imageAsset?.id,
       });
       setUrl("");
       setTitle("");
       setNotes("");
+      setImageAsset(null);
       setSelectedDraftId(draft.id);
       setReflection("");
       setEntryTab("reflect");
@@ -209,6 +214,28 @@ export default function App() {
       await refreshCore();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to create draft.");
+    }
+  }
+
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const result = await api.uploadImageAsset({
+        dataUrl,
+        filename: file.name,
+        altText: notes || title || undefined,
+      });
+      setImageAsset(result.asset);
+      setUrl("");
+      setStatus("Image uploaded. Add a title, note, and reflection when ready.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to upload image.");
+    } finally {
+      event.target.value = "";
     }
   }
 
@@ -497,6 +524,27 @@ export default function App() {
                 placeholder="Short excerpt or why you bookmarked it"
                 rows={4}
               />
+              <label className="image-upload-box">
+                <span>Attach an image</span>
+                <small>JPEG, PNG, WebP, or GIF. We’ll persist the original for later visual parsing.</small>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleImageUpload}
+                />
+              </label>
+              {imageAsset ? (
+                <div className="image-asset-preview">
+                  <img src={imageAsset.url} alt={imageAsset.altText ?? "Uploaded image"} />
+                  <div>
+                    <strong>{imageAsset.filename}</strong>
+                    <small>{formatBytes(imageAsset.byteSize)} stored locally</small>
+                  </div>
+                  <button className="tertiary compact" type="button" onClick={() => setImageAsset(null)}>
+                    Remove
+                  </button>
+                </div>
+              ) : null}
               <button className="primary" type="submit">
                 Create draft
               </button>
@@ -529,6 +577,13 @@ export default function App() {
                       }}
                     >
                       <span className="draft-title">{draft.preview.title}</span>
+                      {draft.preview.imageAsset ? (
+                        <img
+                          className="draft-thumb"
+                          src={draft.preview.imageAsset.url}
+                          alt={draft.preview.imageAsset.altText ?? draft.preview.title}
+                        />
+                      ) : null}
                       <small>{draft.preview.domain || draft.preview.mediaType}</small>
                       <small>{draft.status.replaceAll("_", " ")}</small>
                     </button>
@@ -540,6 +595,13 @@ export default function App() {
                 {selectedDraft ? (
                   <div className="reflect-shell">
                     <div className="selected-draft-summary">
+                      {selectedDraft.preview.imageAsset ? (
+                        <img
+                          className="selected-draft-image"
+                          src={selectedDraft.preview.imageAsset.url}
+                          alt={selectedDraft.preview.imageAsset.altText ?? selectedDraft.preview.title}
+                        />
+                      ) : null}
                       <strong>{selectedDraft.preview.title}</strong>
                       <p>{selectedDraft.preview.excerpt || "No excerpt captured yet."}</p>
                     </div>
@@ -1180,6 +1242,13 @@ function GraphExplorer({
               <span className="kind-tag entry">Entry</span>
               <strong>{detail.title}</strong>
             </div>
+            {detail.imageAsset ? (
+              <img
+                className="detail-image"
+                src={detail.imageAsset.url}
+                alt={detail.imageAsset.altText ?? detail.title}
+              />
+            ) : null}
             <p className="detail-summary">{detail.summary}</p>
             <div className="detail-sections">
               {detail.sections.map((section) => (
@@ -1404,6 +1473,7 @@ function resolveKnowledgeDetail(node: KnowledgeGraphNode, model: KnowledgeGraph)
   return {
     title: node.title,
     summary: node.excerpt || "No source notes captured yet.",
+    imageAsset: node.imageAsset,
     metaLine: compact([node.domain, node.mediaType, "saved"]).join(" · "),
     scoreLabel:
       typeof node.score === "number" ? `Reflection score ${Math.round(node.score * 100)}/100` : undefined,
@@ -1433,6 +1503,22 @@ function getInitials(value: string) {
 
 function compact(values: Array<string | undefined>) {
   return values.filter((value): value is string => Boolean(value));
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Unable to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(value: number) {
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function section(label: string, content?: string) {

@@ -148,3 +148,20 @@ test("store persists edge candidate lifecycle state", () => {
   const dismissed = store.updateEdgeCandidateStatus("session-d", edge.id, "dismissed");
   assert.equal(dismissed?.status, "dismissed");
 });
+
+test("store persists image media assets for drafts", () => {
+  store.createSession("session-e");
+  const asset = store.saveMediaAsset("session-e", {
+    id: "asset-1",
+    kind: "image",
+    filename: "asset-1-image.png",
+    mimeType: "image/png",
+    byteSize: 1024,
+    url: "http://localhost:4000/media-assets/asset-1-image.png",
+    altText: "A test diagram",
+    createdAt: new Date().toISOString(),
+  });
+
+  assert.equal(asset.kind, "image");
+  assert.equal(store.getMediaAsset("asset-1", "session-e")?.altText, "A test diagram");
+});
