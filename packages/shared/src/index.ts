@@ -71,13 +71,23 @@ export type CommittedMediaItem = {
   savedAt: string;
 };
 
+export type ConceptSuggestionStatus = "suggested" | "approved" | "dismissed";
+
+export type ConceptSuggestionEvidence = {
+  sourcePhrase?: string;
+  reflectionPhrase?: string;
+  reason: string;
+};
+
 export type ConceptSuggestion = {
   id: string;
   label: string;
   rationale: string;
   sourceDraftId: string;
   approved: boolean;
+  status?: ConceptSuggestionStatus;
   relatedConceptLabels: string[];
+  evidence?: ConceptSuggestionEvidence;
 };
 
 export type GraphNode = {
@@ -118,11 +128,18 @@ export type KnowledgeGraphEdge = {
   label: string;
   weight: number;
   reasons: string[];
+  status?: GraphEdgeCandidateStatus;
 };
 
 export type KnowledgeGraph = {
   nodes: KnowledgeGraphNode[];
   edges: KnowledgeGraphEdge[];
+};
+
+export type GraphEdgeCandidateStatus = "suggested" | "approved" | "dismissed";
+
+export type GraphEdgeCandidate = KnowledgeGraphEdge & {
+  status: GraphEdgeCandidateStatus;
 };
 
 export type QuizQuestionType =

@@ -810,14 +810,12 @@ textarea {
 .linked-entry-card {
   display: grid;
   gap: 8px;
-  width: 100%;
   text-align: left;
   border: 1px solid rgba(132, 101, 44, 0.14);
   border-radius: 20px;
   background: rgba(255, 252, 245, 0.82);
   padding: 12px 14px;
   color: #3f3010;
-  cursor: pointer;
   transition:
     transform 120ms ease,
     border-color 120ms ease,
@@ -828,6 +826,24 @@ textarea {
   transform: translateY(-1px);
   border-color: rgba(161, 115, 40, 0.28);
   box-shadow: 0 10px 20px rgba(104, 76, 22, 0.08);
+}
+
+.linked-entry-main {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.linked-entry-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .linked-entry-header {
@@ -858,6 +874,30 @@ textarea {
   margin: 0;
   color: rgba(89, 68, 20, 0.78);
   font-size: 0.9rem;
+}
+
+.evidence-box {
+  display: grid;
+  gap: 4px;
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.7);
+  border: 1px solid rgba(89, 68, 20, 0.1);
+  padding: 10px 12px;
+}
+
+.evidence-box small {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(89, 68, 20, 0.58);
+  font-size: 0.68rem;
+}
+
+.evidence-box p,
+.evidence-box span {
+  margin: 0;
+  color: rgba(63, 48, 16, 0.78);
+  font-size: 0.88rem;
+  line-height: 1.35;
 }
 
 .suggestion-heading {

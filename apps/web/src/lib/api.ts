@@ -1,5 +1,6 @@
 import type {
   ConceptSuggestion,
+  GraphEdgeCandidate,
   GraphSnapshot,
   KnowledgeGraph,
   MediaDraft,
@@ -73,6 +74,16 @@ export const api = {
     request("/concepts/approve", {
       method: "POST",
       body: JSON.stringify({ suggestionId }),
+    }),
+  dismissConceptSuggestion: (suggestionId: string) =>
+    request("/concepts/dismiss", {
+      method: "POST",
+      body: JSON.stringify({ suggestionId }),
+    }),
+  updateEdgeCandidate: (edgeId: string, status: GraphEdgeCandidate["status"]) =>
+    request<{ edge: GraphEdgeCandidate }>("/edges/update", {
+      method: "POST",
+      body: JSON.stringify({ edgeId, status }),
     }),
   getGraph: () => request<GraphSnapshot>("/graph"),
   getKnowledgeGraph: () => request<KnowledgeGraph>("/knowledge-graph"),

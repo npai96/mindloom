@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ConceptSuggestion,
+  GraphEdgeCandidate,
   KnowledgeGraph,
   KnowledgeGraphNode,
   MediaDraft,
@@ -28,6 +29,8 @@ type GraphDetail = {
     label: string;
     reasons: string[];
     weight: number;
+    edgeId: string;
+    status?: GraphEdgeCandidate["status"];
   }>;
 };
 
@@ -281,6 +284,26 @@ export default function App() {
       await refreshCore();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to update suggestion.");
+    }
+  }
+
+  async function handleDismissSuggestion(suggestionId: string) {
+    try {
+      await api.dismissConceptSuggestion(suggestionId);
+      setStatus("Concept suggestion dismissed.");
+      await refreshCore();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to dismiss suggestion.");
+    }
+  }
+
+  async function handleUpdateEdge(edgeId: string, status: GraphEdgeCandidate["status"]) {
+    try {
+      await api.updateEdgeCandidate(edgeId, status);
+      setStatus(status === "approved" ? "Link approved." : "Link dismissed.");
+      await refreshCore();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to update link.");
     }
   }
 
@@ -613,6 +636,7 @@ export default function App() {
                 model={knowledgeModel}
                 selectedNodeId={selectedGraphNode?.id ?? null}
                 onSelectNode={setSelectedGraphNodeId}
+                onUpdateEdge={handleUpdateEdge}
                 detail={graphDetail}
               />
             )
@@ -687,6 +711,18 @@ export default function App() {
                         placeholder="Why does this concept fit this entry?"
                       />
                     )}
+                    {suggestion.evidence ? (
+                      <div className="evidence-box">
+                        <small>Evidence</small>
+                        <p>{suggestion.evidence.reason}</p>
+                        {suggestion.evidence.sourcePhrase ? (
+                          <span>Source: {suggestion.evidence.sourcePhrase}</span>
+                        ) : null}
+                        {suggestion.evidence.reflectionPhrase ? (
+                          <span>Reflection: {suggestion.evidence.reflectionPhrase}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {suggestion.approved ? (
                       suggestion.relatedConceptLabels.length > 0 ? (
                         <div className="detail-meta">
@@ -755,6 +791,14 @@ export default function App() {
                       >
                         {suggestion.approved ? "Approved" : "Approve link"}
                       </button>
+                      {!suggestion.approved ? (
+                        <button
+                          className="tertiary"
+                          onClick={() => handleDismissSuggestion(suggestion.id)}
+                        >
+                          Dismiss
+                        </button>
+                      ) : null}
                       {sourceDraft && sourceDraft.status === "saved" ? (
                         <button
                           className="tertiary"
@@ -958,11 +1002,13 @@ function GraphExplorer({
   model,
   selectedNodeId,
   onSelectNode,
+  onUpdateEdge,
   detail,
 }: {
   model: KnowledgeGraph;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
+  onUpdateEdge: (edgeId: string, status: GraphEdgeCandidate["status"]) => void;
   detail: GraphDetail | null;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -1164,25 +1210,46 @@ function GraphExplorer({
                 <small>Why linked</small>
                 <div className="linked-entry-list">
                   {detail.linkedEntries.map((entry) => (
-                    <button
+                    <div
                       key={entry.id}
-                      type="button"
                       className="linked-entry-card"
-                      onClick={() => onSelectNode(entry.id)}
                     >
-                      <div className="linked-entry-header">
-                        <strong>{entry.title}</strong>
-                        <span>{Math.round(entry.weight * 100)}</span>
+                      <button
+                        type="button"
+                        className="linked-entry-main"
+                        onClick={() => onSelectNode(entry.id)}
+                      >
+                        <div className="linked-entry-header">
+                          <strong>{entry.title}</strong>
+                          <span>{Math.round(entry.weight * 100)}</span>
+                        </div>
+                        <p>{entry.label}</p>
+                        <div className="detail-meta">
+                          {entry.reasons.map((reason) => (
+                            <span key={reason} className="meta-chip">
+                              {reason}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                      <div className="linked-entry-actions">
+                        <span className="pill subtle-pill">{entry.status ?? "suggested"}</span>
+                        {entry.status !== "approved" ? (
+                          <button
+                            className="tertiary compact"
+                            onClick={() => onUpdateEdge(entry.edgeId, "approved")}
+                          >
+                            Approve
+                          </button>
+                        ) : null}
+                        <button
+                          className="tertiary compact"
+                          onClick={() => onUpdateEdge(entry.edgeId, "dismissed")}
+                        >
+                          Dismiss
+                        </button>
                       </div>
-                      <p>{entry.label}</p>
-                      <div className="detail-meta">
-                        {entry.reasons.map((reason) => (
-                          <span key={reason} className="meta-chip">
-                            {reason}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1316,26 +1383,22 @@ function layoutKnowledgeGraph(model: KnowledgeGraph, viewportWidth: number) {
 function resolveKnowledgeDetail(node: KnowledgeGraphNode, model: KnowledgeGraph): GraphDetail {
   const linkedEntries = model.edges
     .filter((edge) => edge.from === node.id || edge.to === node.id)
-    .map((edge) => {
+    .flatMap((edge) => {
       const relatedId = edge.from === node.id ? edge.to : edge.from;
       const relatedNode = model.nodes.find((candidate) => candidate.id === relatedId);
       if (!relatedNode) {
-        return null;
+        return [];
       }
-      return {
+      return [{
         id: relatedNode.id,
         title: relatedNode.title,
         label: edge.label,
         reasons: edge.reasons,
         weight: edge.weight,
-      };
+        edgeId: edge.id,
+        status: edge.status,
+      }];
     })
-    .filter(
-      (
-        entry,
-      ): entry is { id: string; title: string; label: string; reasons: string[]; weight: number } =>
-        Boolean(entry),
-    )
     .sort((left, right) => right.weight - left.weight);
 
   return {

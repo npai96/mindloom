@@ -8,6 +8,7 @@ import type {
   ConceptSuggestion,
   DraftStatus,
   GraphEdge,
+  GraphEdgeCandidate,
   GraphNode,
   MediaDraft,
   ParadigmNodePayload,
@@ -94,7 +95,9 @@ db.exec(`
     label TEXT NOT NULL,
     rationale TEXT NOT NULL,
     approved INTEGER NOT NULL,
-    related_concept_labels_json TEXT NOT NULL
+    related_concept_labels_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'suggested',
+    evidence_json TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_concept_suggestions_source_draft_id
@@ -113,6 +116,22 @@ db.exec(`
     type TEXT NOT NULL,
     context TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS edge_candidates (
+    id TEXT PRIMARY KEY,
+    owner_session_id TEXT NOT NULL,
+    from_draft_id TEXT NOT NULL,
+    to_draft_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    weight REAL NOT NULL,
+    reasons_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_edge_candidates_owner_session_id
+    ON edge_candidates (owner_session_id);
 
   CREATE TABLE IF NOT EXISTS quizzes (
     session_id TEXT PRIMARY KEY,
@@ -150,6 +169,17 @@ const draftColumns = db
   .all() as Array<{ name: string }>;
 if (!draftColumns.some((column) => column.name === "owner_user_id")) {
   db.exec(`ALTER TABLE drafts ADD COLUMN owner_user_id TEXT`);
+}
+
+const conceptSuggestionColumns = db
+  .prepare(`PRAGMA table_info(concept_suggestions)`)
+  .all() as Array<{ name: string }>;
+if (!conceptSuggestionColumns.some((column) => column.name === "status")) {
+  db.exec(`ALTER TABLE concept_suggestions ADD COLUMN status TEXT NOT NULL DEFAULT 'suggested'`);
+  db.exec(`UPDATE concept_suggestions SET status = CASE approved WHEN 1 THEN 'approved' ELSE 'suggested' END`);
+}
+if (!conceptSuggestionColumns.some((column) => column.name === "evidence_json")) {
+  db.exec(`ALTER TABLE concept_suggestions ADD COLUMN evidence_json TEXT`);
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -204,13 +234,20 @@ function mapDraft(row: Record<string, unknown>): DraftRecord {
 }
 
 function mapConceptSuggestion(row: Record<string, unknown>): ConceptSuggestion {
+  const status =
+    row.status ? String(row.status) as ConceptSuggestion["status"] : Number(row.approved) === 1 ? "approved" : "suggested";
   return {
     id: String(row.id),
     sourceDraftId: String(row.source_draft_id),
     label: String(row.label),
     rationale: String(row.rationale),
-    approved: Number(row.approved) === 1,
+    approved: status === "approved",
+    status,
     relatedConceptLabels: parseJson(String(row.related_concept_labels_json), []),
+    evidence: parseJson(
+      row.evidence_json ? String(row.evidence_json) : undefined,
+      undefined,
+    ) as ConceptSuggestion["evidence"],
   };
 }
 
@@ -229,6 +266,18 @@ function mapGraphEdge(row: Record<string, unknown>): GraphEdge {
     to: String(row.to_node_id),
     type: String(row.type),
     context: row.context ? String(row.context) : undefined,
+  };
+}
+
+function mapEdgeCandidate(row: Record<string, unknown>): GraphEdgeCandidate {
+  return {
+    id: String(row.id),
+    from: String(row.from_draft_id),
+    to: String(row.to_draft_id),
+    label: String(row.label),
+    weight: Number(row.weight),
+    reasons: parseJson(String(row.reasons_json), []),
+    status: row.status as GraphEdgeCandidate["status"],
   };
 }
 
@@ -317,15 +366,17 @@ const getDraftByMediaNodeIdStmt = db.prepare(`
 `);
 const insertConceptSuggestionStmt = db.prepare(`
   INSERT INTO concept_suggestions (
-    id, source_draft_id, label, rationale, approved, related_concept_labels_json
+    id, source_draft_id, label, rationale, approved, related_concept_labels_json, status, evidence_json
   )
-  VALUES (?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     source_draft_id = excluded.source_draft_id,
     label = excluded.label,
     rationale = excluded.rationale,
     approved = excluded.approved,
-    related_concept_labels_json = excluded.related_concept_labels_json
+    related_concept_labels_json = excluded.related_concept_labels_json,
+    status = excluded.status,
+    evidence_json = excluded.evidence_json
 `);
 const listConceptSuggestionsStmt = db.prepare(`
   SELECT cs.*
@@ -340,12 +391,17 @@ const getConceptSuggestionStmt = db.prepare(`
 `);
 const approveConceptSuggestionStmt = db.prepare(`
   UPDATE concept_suggestions
-  SET approved = 1
+  SET approved = 1, status = 'approved'
+  WHERE id = ?
+`);
+const dismissConceptSuggestionStmt = db.prepare(`
+  UPDATE concept_suggestions
+  SET approved = 0, status = 'dismissed'
   WHERE id = ?
 `);
 const updateConceptSuggestionStmt = db.prepare(`
   UPDATE concept_suggestions
-  SET label = ?, rationale = ?, related_concept_labels_json = ?
+  SET label = ?, rationale = ?, related_concept_labels_json = ?, evidence_json = ?
   WHERE id = ?
 `);
 const upsertGraphNodeStmt = db.prepare(`
@@ -374,6 +430,32 @@ const findConceptNodeByLowerLabelStmt = db.prepare(`
   FROM graph_nodes
   WHERE kind = 'concept' AND lower(label) = ?
   LIMIT 1
+`);
+const getEdgeCandidateStmt = db.prepare(`
+  SELECT *
+  FROM edge_candidates
+  WHERE id = ? AND owner_session_id = ?
+`);
+const listEdgeCandidatesStmt = db.prepare(`
+  SELECT *
+  FROM edge_candidates
+  WHERE owner_session_id = ?
+`);
+const insertEdgeCandidateStmt = db.prepare(`
+  INSERT INTO edge_candidates (
+    id, owner_session_id, from_draft_id, to_draft_id, label, weight, reasons_json, status, created_at, updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET
+    label = excluded.label,
+    weight = excluded.weight,
+    reasons_json = excluded.reasons_json,
+    updated_at = excluded.updated_at
+`);
+const updateEdgeCandidateStatusStmt = db.prepare(`
+  UPDATE edge_candidates
+  SET status = ?, updated_at = ?
+  WHERE id = ? AND owner_session_id = ?
 `);
 const deleteGraphNodeStmt = db.prepare(`
   DELETE FROM graph_nodes
@@ -560,6 +642,8 @@ export const store = {
       suggestion.rationale,
       suggestion.approved ? 1 : 0,
       serializeJson(suggestion.relatedConceptLabels),
+      suggestion.status ?? (suggestion.approved ? "approved" : "suggested"),
+      suggestion.evidence ? serializeJson(suggestion.evidence) : null,
     );
     return suggestion;
   },
@@ -583,7 +667,20 @@ export const store = {
       return undefined;
     }
     approveConceptSuggestionStmt.run(id);
-    return { ...suggestion, approved: true };
+    return { ...suggestion, approved: true, status: "approved" as const };
+  },
+  dismissConceptSuggestion(id: string, sessionId: string) {
+    const suggestionRow = getConceptSuggestionStmt.get(id) as Record<string, unknown> | undefined;
+    if (!suggestionRow) {
+      return undefined;
+    }
+    const suggestion = mapConceptSuggestion(suggestionRow);
+    const draft = this.getDraft(suggestion.sourceDraftId, sessionId);
+    if (!draft) {
+      return undefined;
+    }
+    dismissConceptSuggestionStmt.run(id);
+    return { ...suggestion, approved: false, status: "dismissed" as const };
   },
   updateConceptSuggestion(
     id: string,
@@ -609,6 +706,7 @@ export const store = {
       updated.label,
       updated.rationale,
       serializeJson(updated.relatedConceptLabels),
+      updated.evidence ? serializeJson(updated.evidence) : null,
       id,
     );
     return updated;
@@ -624,6 +722,49 @@ export const store = {
       label.trim().toLowerCase(),
     ) as Record<string, unknown> | undefined;
     return row ? mapGraphNode(row) : undefined;
+  },
+  listEdgeCandidates(sessionId: string) {
+    return (listEdgeCandidatesStmt.all(sessionId) as Record<string, unknown>[]).map(
+      mapEdgeCandidate,
+    );
+  },
+  upsertEdgeCandidate(sessionId: string, edge: Omit<GraphEdgeCandidate, "status">) {
+    const existing = getEdgeCandidateStmt.get(edge.id, sessionId) as
+      | Record<string, unknown>
+      | undefined;
+    if (existing && mapEdgeCandidate(existing).status === "dismissed") {
+      return mapEdgeCandidate(existing);
+    }
+    const now = new Date().toISOString();
+    insertEdgeCandidateStmt.run(
+      edge.id,
+      sessionId,
+      edge.from,
+      edge.to,
+      edge.label,
+      edge.weight,
+      serializeJson(edge.reasons),
+      "suggested",
+      now,
+      now,
+    );
+    const row = getEdgeCandidateStmt.get(edge.id, sessionId) as Record<string, unknown>;
+    return mapEdgeCandidate(row);
+  },
+  updateEdgeCandidateStatus(
+    sessionId: string,
+    edgeId: string,
+    status: GraphEdgeCandidate["status"],
+  ) {
+    const existing = getEdgeCandidateStmt.get(edgeId, sessionId) as
+      | Record<string, unknown>
+      | undefined;
+    if (!existing) {
+      return undefined;
+    }
+    updateEdgeCandidateStatusStmt.run(status, new Date().toISOString(), edgeId, sessionId);
+    const row = getEdgeCandidateStmt.get(edgeId, sessionId) as Record<string, unknown>;
+    return mapEdgeCandidate(row);
   },
   getGraph(sessionId: string) {
     const ownedDraftIds = new Set(this.listDrafts(sessionId).map((draft) => draft.id));
@@ -753,7 +894,7 @@ export const store = {
     return {
       savedCount: this.listDrafts(sessionId).filter((draft) => draft.status === "saved").length,
       conceptCount: suggestions.filter((item) => item.approved).length,
-      pendingSuggestions: suggestions.filter((item) => !item.approved).length,
+      pendingSuggestions: suggestions.filter((item) => (item.status ?? "suggested") === "suggested").length,
     };
   },
   getSavedArtifact(draftId: string) {

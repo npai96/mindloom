@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import type { ConceptSuggestion, GraphSnapshot, MediaDraft } from "@actually-learn/shared";
+import type {
+  ConceptSuggestion,
+  GraphEdgeCandidate,
+  GraphSnapshot,
+  MediaDraft,
+} from "@actually-learn/shared";
 
 import { buildKnowledgeGraph } from "./services/knowledge.js";
 
@@ -36,8 +41,9 @@ function buildGraph(
   drafts: MediaDraft[],
   suggestions: ConceptSuggestion[] = [],
   graph: GraphSnapshot = { nodes: [], edges: [] },
+  edgeCandidates: GraphEdgeCandidate[] = [],
 ) {
-  return buildKnowledgeGraph({ drafts, suggestions, graph });
+  return buildKnowledgeGraph({ drafts, suggestions, graph, edgeCandidates });
 }
 
 test("buildKnowledgeGraph links entries through distinctive shared concepts", () => {
@@ -201,4 +207,54 @@ test("buildKnowledgeGraph prefers cleaner concept labels after normalization", (
   const knowledge = buildGraph(drafts, suggestions);
 
   assert.deepEqual(knowledge.nodes[0]?.concepts, ["Mental Model"]);
+});
+
+test("buildKnowledgeGraph respects dismissed persisted edge candidates", () => {
+  const drafts = [
+    createSavedDraft(
+      "draft-1",
+      "Thinking in public",
+      "I saved this because public writing creates accountability and compounds clarity.",
+    ),
+    createSavedDraft(
+      "draft-2",
+      "Public writing rituals",
+      "This matters because writing in public creates accountability and helps clarity compound.",
+    ),
+  ];
+  const generated = buildGraph(drafts);
+  const edge = generated.edges[0];
+  assert.ok(edge);
+
+  const knowledge = buildGraph(drafts, [], { nodes: [], edges: [] }, [
+    {
+      ...edge,
+      status: "dismissed",
+    },
+  ]);
+
+  assert.equal(knowledge.edges.length, 0);
+});
+
+test("buildKnowledgeGraph keeps approved persisted edge candidates when weakly regenerated", () => {
+  const drafts = [
+    createSavedDraft("draft-1", "Safety signals", "I want to remember nervous system safety."),
+    createSavedDraft("draft-2", "Calendar design", "This is about protecting attention."),
+  ];
+
+  const knowledge = buildGraph(drafts, [], { nodes: [], edges: [] }, [
+    {
+      id: "draft-1:draft-2",
+      from: "draft-1",
+      to: "draft-2",
+      label: "User-approved connection",
+      weight: 0.3,
+      reasons: ["Manually approved as a meaningful link."],
+      status: "approved",
+    },
+  ]);
+
+  assert.equal(knowledge.edges.length, 1);
+  assert.equal(knowledge.edges[0]?.status, "approved");
+  assert.match(knowledge.edges[0]?.label ?? "", /user-approved/i);
 });

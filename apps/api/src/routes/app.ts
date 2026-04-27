@@ -6,6 +6,7 @@ import type { Request, Response } from "express";
 import {
   relationshipTypes,
   schemaUris,
+  type GraphEdgeCandidate,
   type GraphEdge,
   type GraphNode,
   type ConceptSuggestion,
@@ -18,7 +19,7 @@ import { getEnv } from "../lib/env.js";
 import { readJson, sendError } from "../lib/http.js";
 import { ParadigmClient } from "../services/paradigm.js";
 import {
-  buildConceptSuggestionCandidate,
+  buildConceptSuggestionCandidates,
   buildQuizQuestions,
   evaluateReflection,
   generateReflectionPrompts,
@@ -61,6 +62,10 @@ function getSessionId(req: Request, res: Response) {
     return undefined;
   }
   return sessionId;
+}
+
+function normalizeKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function canHydrateFromPermissions(permissions: Record<string, string[]>) {
@@ -717,30 +722,38 @@ appRouter.get("/concepts/suggestions", (req, res) => {
   if (!sessionId) {
     return;
   }
-  const suggestions = store
-    .listConceptSuggestions(sessionId)
-    .concat(
-      store
-        .listDrafts(sessionId)
-        .filter((draft) => draft.status === "saved")
-        .flatMap((draft) => {
-          if (store.listConceptSuggestions(sessionId).some((item) => item.sourceDraftId === draft.id)) {
-            return [];
-          }
-          const candidate = buildConceptSuggestionCandidate(draft);
-          const suggestion: ConceptSuggestion = {
-            id: randomUUID(),
-            label: candidate.label,
-            rationale: candidate.rationale,
-            sourceDraftId: draft.id,
-            approved: false,
-            relatedConceptLabels: candidate.relatedConceptLabels,
-          };
-          store.saveConceptSuggestion(suggestion);
-          return [suggestion];
-        }),
-    );
-  res.json({ suggestions });
+  const existing = store.listConceptSuggestions(sessionId);
+  const existingKeys = new Set(
+    existing.map((item) => `${item.sourceDraftId}:${normalizeKey(item.label)}`),
+  );
+
+  for (const draft of store.listDrafts(sessionId).filter((item) => item.status === "saved")) {
+    const candidates = buildConceptSuggestionCandidates(draft);
+    for (const candidate of candidates) {
+      const key = `${draft.id}:${normalizeKey(candidate.label)}`;
+      if (existingKeys.has(key)) {
+        continue;
+      }
+      const suggestion: ConceptSuggestion = {
+        id: randomUUID(),
+        label: candidate.label,
+        rationale: candidate.rationale,
+        sourceDraftId: draft.id,
+        approved: false,
+        status: "suggested",
+        relatedConceptLabels: candidate.relatedConceptLabels,
+        evidence: candidate.evidence,
+      };
+      store.saveConceptSuggestion(suggestion);
+      existingKeys.add(key);
+    }
+  }
+
+  res.json({
+    suggestions: store
+      .listConceptSuggestions(sessionId)
+      .filter((suggestion) => suggestion.status !== "dismissed"),
+  });
 });
 
 appRouter.post("/concepts/approve", async (req, res) => {
@@ -831,6 +844,19 @@ appRouter.post("/concepts/update", (req, res) => {
   res.json({ suggestion: updated });
 });
 
+appRouter.post("/concepts/dismiss", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const body = readJson<{ suggestionId: string }>(req);
+  const dismissed = store.dismissConceptSuggestion(body.suggestionId, sessionId);
+  if (!dismissed) {
+    return sendError(res, 404, "Suggestion not found.");
+  }
+  res.json({ suggestion: dismissed });
+});
+
 appRouter.get("/graph", (req, res) => {
   const sessionId = getSessionId(req, res);
   if (!sessionId) {
@@ -845,13 +871,48 @@ appRouter.get("/knowledge-graph", (req, res) => {
     return;
   }
 
+  const drafts = store.listDrafts(sessionId);
+  const suggestions = store.listConceptSuggestions(sessionId);
+  const graph = store.getGraph(sessionId);
+  const generated = buildKnowledgeGraph({ drafts, suggestions, graph });
+  generated.edges.forEach((edge) => store.upsertEdgeCandidate(sessionId, edge));
+
   res.json(
     buildKnowledgeGraph({
-      drafts: store.listDrafts(sessionId),
-      suggestions: store.listConceptSuggestions(sessionId),
-      graph: store.getGraph(sessionId),
+      drafts,
+      suggestions,
+      graph,
+      edgeCandidates: store.listEdgeCandidates(sessionId),
     }),
   );
+});
+
+appRouter.get("/edges/candidates", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  res.json({
+    edges: store
+      .listEdgeCandidates(sessionId)
+      .filter((edge) => edge.status !== "dismissed"),
+  });
+});
+
+appRouter.post("/edges/update", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const body = readJson<{ edgeId: string; status: GraphEdgeCandidate["status"] }>(req);
+  if (!["suggested", "approved", "dismissed"].includes(body.status)) {
+    return sendError(res, 400, "Unsupported edge status.");
+  }
+  const updated = store.updateEdgeCandidateStatus(sessionId, body.edgeId, body.status);
+  if (!updated) {
+    return sendError(res, 404, "Edge candidate not found.");
+  }
+  res.json({ edge: updated });
 });
 
 appRouter.get("/quiz/weekly", (req, res) => {
@@ -859,9 +920,23 @@ appRouter.get("/quiz/weekly", (req, res) => {
   if (!sessionId) {
     return;
   }
+  const knowledge = buildKnowledgeGraph({
+    drafts: store.listDrafts(sessionId),
+    suggestions: store.listConceptSuggestions(sessionId),
+    graph: store.getGraph(sessionId),
+    edgeCandidates: store.listEdgeCandidates(sessionId),
+  });
   const questions = buildQuizQuestions(
     store.listDrafts(sessionId),
     (draftId) => store.getRepetitionScore(draftId),
+    (draftId) => {
+      const node = knowledge.nodes.find((item) => item.id === draftId);
+      return {
+        concepts: node?.concepts ?? [],
+        edgeCount: knowledge.edges.filter((edge) => edge.from === draftId || edge.to === draftId)
+          .length,
+      };
+    },
   );
   const quiz = store.createQuiz({
     sessionId: randomUUID(),

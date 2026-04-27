@@ -117,3 +117,34 @@ test("store can find existing concept nodes by label", () => {
 
   assert.equal(existing?.id, "concept-node-1");
 });
+
+test("store persists edge candidate lifecycle state", () => {
+  store.createSession("session-d");
+  const edge = store.upsertEdgeCandidate("session-d", {
+    id: "draft-a:draft-b",
+    from: "draft-a",
+    to: "draft-b",
+    label: "Shared concept: attention",
+    weight: 0.42,
+    reasons: ["Shared concept: attention"],
+  });
+
+  assert.equal(edge.status, "suggested");
+
+  const approved = store.updateEdgeCandidateStatus("session-d", edge.id, "approved");
+  assert.equal(approved?.status, "approved");
+
+  store.upsertEdgeCandidate("session-d", {
+    id: "draft-a:draft-b",
+    from: "draft-a",
+    to: "draft-b",
+    label: "Regenerated label",
+    weight: 0.4,
+    reasons: ["Regenerated reason"],
+  });
+
+  assert.equal(store.listEdgeCandidates("session-d")[0]?.status, "approved");
+
+  const dismissed = store.updateEdgeCandidateStatus("session-d", edge.id, "dismissed");
+  assert.equal(dismissed?.status, "dismissed");
+});

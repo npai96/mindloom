@@ -1,5 +1,6 @@
 import type {
   ConceptSuggestion,
+  GraphEdgeCandidate,
   GraphNode,
   GraphSnapshot,
   KnowledgeGraph,
@@ -12,6 +13,7 @@ type BuildKnowledgeGraphParams = {
   drafts: MediaDraft[];
   suggestions: ConceptSuggestion[];
   graph: GraphSnapshot;
+  edgeCandidates?: GraphEdgeCandidate[];
 };
 
 const genericConcepts = new Set([
@@ -50,6 +52,7 @@ export function buildKnowledgeGraph({
   drafts,
   suggestions,
   graph,
+  edgeCandidates = [],
 }: BuildKnowledgeGraphParams): KnowledgeGraph {
   const savedDrafts = drafts.filter((draft) => draft.status === "saved");
   const conceptsByDraftId = new Map<string, Set<string>>();
@@ -118,7 +121,7 @@ export function buildKnowledgeGraph({
     nodes.flatMap((node) => extractKeywords(toSimilarityText(node))),
   );
 
-  const edges: KnowledgeGraphEdge[] = [];
+  const generatedEdges: KnowledgeGraphEdge[] = [];
   for (let index = 0; index < nodes.length; index += 1) {
     for (let compareIndex = index + 1; compareIndex < nodes.length; compareIndex += 1) {
       const current = nodes[index];
@@ -128,7 +131,7 @@ export function buildKnowledgeGraph({
         continue;
       }
 
-      edges.push({
+      generatedEdges.push({
         id: `${current.id}:${other.id}`,
         from: current.id,
         to: other.id,
@@ -142,7 +145,51 @@ export function buildKnowledgeGraph({
     }
   }
 
+  const edges = mergePersistedEdgeCandidates(generatedEdges, edgeCandidates, nodes);
   return { nodes, edges };
+}
+
+function mergePersistedEdgeCandidates(
+  generatedEdges: KnowledgeGraphEdge[],
+  edgeCandidates: GraphEdgeCandidate[],
+  nodes: KnowledgeGraphNode[],
+) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const generatedById = new Map(generatedEdges.map((edge) => [edge.id, edge]));
+  const candidateById = new Map(edgeCandidates.map((edge) => [edge.id, edge]));
+  const merged = new Map<string, KnowledgeGraphEdge>();
+
+  for (const edge of generatedEdges) {
+    const candidate = candidateById.get(edge.id);
+    if (candidate?.status === "dismissed") {
+      continue;
+    }
+    merged.set(edge.id, {
+      ...edge,
+      ...(candidate
+        ? {
+            label: candidate.label,
+            weight: candidate.weight,
+            reasons: candidate.reasons,
+            status: candidate.status,
+          }
+        : { status: "suggested" as const }),
+    });
+  }
+
+  for (const candidate of edgeCandidates) {
+    if (
+      candidate.status !== "approved" ||
+      generatedById.has(candidate.id) ||
+      !nodeIds.has(candidate.from) ||
+      !nodeIds.has(candidate.to)
+    ) {
+      continue;
+    }
+    merged.set(candidate.id, candidate);
+  }
+
+  return Array.from(merged.values()).sort((left, right) => right.weight - left.weight);
 }
 
 function scoreSimilarity(

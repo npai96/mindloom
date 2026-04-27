@@ -81,31 +81,71 @@ export function generateReflectionPrompts(preview: MediaDraft["preview"]): Refle
 export function buildConceptSuggestionCandidate(
   draft: MediaDraft,
 ): Pick<ConceptSuggestion, "label" | "rationale" | "relatedConceptLabels"> {
+  return buildConceptSuggestionCandidates(draft)[0] ?? {
+    label: toTitleCase(fallbackConceptLabel(draft.preview.domain, draft.preview.mediaType)),
+    rationale: "This entry has a general theme worth revisiting later.",
+    relatedConceptLabels: [toTitleCase(draft.preview.mediaType)],
+  };
+}
+
+export function buildConceptSuggestionCandidates(
+  draft: MediaDraft,
+): Array<Pick<ConceptSuggestion, "label" | "rationale" | "relatedConceptLabels" | "evidence">> {
   const phrases = extractMeaningfulPhrases([
     draft.preview.title,
     draft.reflection,
     draft.preview.excerpt,
   ]);
-  const label = toTitleCase(
-    phrases[0] ??
+  const sourcePhrases = extractMeaningfulPhrases([draft.preview.title, draft.preview.excerpt]);
+  const reflectionPhrases = extractMeaningfulPhrases([draft.reflection]);
+  const labels = Array.from(
+    new Set([
+      ...phrases.slice(0, 3),
       fallbackConceptLabel(draft.preview.domain, draft.preview.mediaType),
-  );
-  const relatedConceptLabels = phrases
-    .filter((phrase) => normalizePhrase(phrase) !== normalizePhrase(label))
-    .slice(0, 2)
-    .map((phrase) => toTitleCase(phrase));
+    ]),
+  )
+    .filter((phrase) => !isGenericConcept(phrase))
+    .slice(0, 3);
 
-  return {
-    label,
-    rationale: `This entry seems to orbit ${label.toLowerCase()} in a way worth revisiting later.`,
-    relatedConceptLabels:
-      relatedConceptLabels.length > 0 ? relatedConceptLabels : [toTitleCase(draft.preview.mediaType)],
-  };
+  return labels.map((phrase) => {
+    const label = toTitleCase(phrase);
+    const relatedConceptLabels = phrases
+      .filter((candidate) => normalizePhrase(candidate) !== normalizePhrase(label))
+      .slice(0, 3)
+      .map((candidate) => toTitleCase(candidate));
+    const sourcePhrase =
+      sourcePhrases.find((candidate) => normalizePhrase(candidate) === normalizePhrase(phrase)) ??
+      sourcePhrases[0];
+    const reflectionPhrase =
+      reflectionPhrases.find((candidate) => normalizePhrase(candidate) === normalizePhrase(phrase)) ??
+      reflectionPhrases[0];
+
+    return {
+      label,
+      rationale: `This entry seems to orbit ${label.toLowerCase()} in a way worth revisiting later.`,
+      relatedConceptLabels:
+        relatedConceptLabels.length > 0
+          ? relatedConceptLabels
+          : [toTitleCase(draft.preview.mediaType)],
+      evidence: {
+        sourcePhrase: sourcePhrase ? toTitleCase(sourcePhrase) : undefined,
+        reflectionPhrase: reflectionPhrase ? toTitleCase(reflectionPhrase) : undefined,
+        reason:
+          sourcePhrase && reflectionPhrase
+            ? "The concept appears in both the captured material and your reflection."
+            : "The concept was extracted from the strongest non-generic language in this entry.",
+      },
+    };
+  });
 }
 
 export function buildQuizQuestions(
   drafts: MediaDraft[],
   repetitionScoreFor: (draftId: string) => number,
+  contextFor: (draftId: string) => { concepts: string[]; edgeCount: number } = () => ({
+    concepts: [],
+    edgeCount: 0,
+  }),
 ): QuizQuestion[] {
   const saved = drafts.filter((draft) => draft.status === "saved");
   const ranked = saved
@@ -114,9 +154,12 @@ export function buildQuizQuestions(
         (Date.now() - new Date(draft.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
       const recencyWeight = Math.max(0.1, 10 - ageDays);
       const repetitionWeight = 3 - repetitionScoreFor(draft.id);
+      const context = contextFor(draft.id);
+      const graphWeight = Math.min(2, context.edgeCount * 0.4) + Math.min(1.5, context.concepts.length * 0.3);
       return {
         draft,
-        weight: recencyWeight + repetitionWeight,
+        context,
+        weight: recencyWeight + repetitionWeight + graphWeight,
       };
     })
     .sort((a, b) => b.weight - a.weight)
@@ -128,19 +171,24 @@ export function buildQuizQuestions(
     "concept_match",
   ];
 
-  return ranked.map(({ draft }, index) => ({
-    id: `question-${draft.id}`,
-    draftId: draft.id,
-    itemTitle: draft.preview.title,
-    type: questionTypes[index % questionTypes.length],
-    conceptHint: draft.preview.domain,
-    prompt:
-      index % 3 === 0
-        ? `Why did you save "${draft.preview.title}"?`
-        : index % 3 === 1
-          ? `Write a two-sentence summary of "${draft.preview.title}" in your own words.`
-          : `Which concept or theme best links "${draft.preview.title}" to your broader interests?`,
-  }));
+  return ranked.map(({ draft, context }, index) => {
+    const conceptHint = context.concepts[0] ?? draft.preview.domain;
+    return {
+      id: `question-${draft.id}`,
+      draftId: draft.id,
+      itemTitle: draft.preview.title,
+      type: questionTypes[index % questionTypes.length],
+      conceptHint,
+      prompt:
+        index % 3 === 0
+          ? `Why did you save "${draft.preview.title}"?`
+          : index % 3 === 1
+            ? `Write a two-sentence summary of "${draft.preview.title}" in your own words.`
+            : `Which concept or theme best links "${draft.preview.title}" to ${
+                conceptHint ? `"${conceptHint}"` : "your broader interests"
+              }?`,
+    };
+  });
 }
 
 export function scoreQuizAnswer(question: QuizQuestion, answer: string) {
