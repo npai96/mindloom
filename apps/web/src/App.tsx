@@ -12,7 +12,7 @@ import type {
 import { api } from "./lib/api";
 
 type QuizSession = Awaited<ReturnType<typeof api.createWeeklyQuiz>>;
-type KnowledgeTab = "graph" | "suggestions";
+type KnowledgeTab = "graph" | "concepts" | "suggestions";
 type EntryTab = "capture" | "reflect";
 
 type GraphDetail = {
@@ -35,6 +35,15 @@ type SuggestionEdit = {
   label: string;
   rationale: string;
   relatedConceptLabels: string;
+};
+
+type ConceptGroup = {
+  key: string;
+  label: string;
+  rationale?: string;
+  relatedLabels: string[];
+  linkedNodes: KnowledgeGraphNode[];
+  suggestionCount: number;
 };
 
 const initialMe: MeResponse = {
@@ -333,6 +342,7 @@ export default function App() {
     }
     return left.label.localeCompare(right.label);
   });
+  const conceptGroups = buildConceptGroups(suggestions, knowledgeModel.nodes);
   const activeQuizQuestion = quiz?.questions[currentQuizIndex] ?? null;
   const answeredQuizCount = quiz
     ? quiz.questions.filter((question) => (quizAnswers[question.id] ?? "").trim().length > 0).length
@@ -578,6 +588,12 @@ export default function App() {
                 Graph
               </button>
               <button
+                className={`tab-button ${knowledgeTab === "concepts" ? "active" : ""}`}
+                onClick={() => setKnowledgeTab("concepts")}
+              >
+                Concepts
+              </button>
+              <button
                 className={`tab-button ${knowledgeTab === "suggestions" ? "active" : ""}`}
                 onClick={() => setKnowledgeTab("suggestions")}
               >
@@ -600,6 +616,14 @@ export default function App() {
                 detail={graphDetail}
               />
             )
+          ) : knowledgeTab === "concepts" ? (
+            <ConceptLibrary
+              groups={conceptGroups}
+              onViewEntry={(nodeId) => {
+                setSelectedGraphNodeId(nodeId);
+                setKnowledgeTab("graph");
+              }}
+            />
           ) : (
             <div className="suggestions-grid">
               {suggestions.length === 0 ? (
@@ -862,6 +886,70 @@ export default function App() {
           ) : null}
         </section>
       </main>
+    </div>
+  );
+}
+
+function ConceptLibrary({
+  groups,
+  onViewEntry,
+}: {
+  groups: ConceptGroup[];
+  onViewEntry: (nodeId: string) => void;
+}) {
+  if (groups.length === 0) {
+    return (
+      <div className="empty-state">
+        <strong>No approved concepts yet</strong>
+        <p>Approve a suggestion or save an entry with shared themes to build this library.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="concepts-grid">
+      {groups.map((group) => (
+        <article key={group.key} className="concept-card">
+          <div className="concept-card-topline">
+            <div>
+              <small>{group.linkedNodes.length} linked entries</small>
+              <h3>{group.label}</h3>
+            </div>
+            <span className="pill subtle-pill">
+              {group.suggestionCount > 0 ? "Approved" : "From graph"}
+            </span>
+          </div>
+
+          {group.rationale ? <p>{group.rationale}</p> : null}
+
+          {group.relatedLabels.length > 0 ? (
+            <div className="detail-meta">
+              {group.relatedLabels.map((label) => (
+                <span key={label} className="meta-chip">
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="concept-entry-list">
+            {group.linkedNodes.length > 0 ? (
+              group.linkedNodes.map((node) => (
+                <button
+                  key={node.id}
+                  className="concept-entry-button"
+                  onClick={() => onViewEntry(node.id)}
+                >
+                  <span>{node.title}</span>
+                  <small>{node.reflection || node.summary || "Open saved entry"}</small>
+                </button>
+              ))
+            ) : (
+              <p className="subtle">No saved entries are attached yet.</p>
+            )}
+          </div>
+        </article>
+      ))}
     </div>
   );
 }
@@ -1343,6 +1431,83 @@ function findNearbyApprovedThemes(
         }),
     ),
   ).slice(0, 3);
+}
+
+function buildConceptGroups(
+  suggestions: ConceptSuggestion[],
+  nodes: KnowledgeGraphNode[],
+): ConceptGroup[] {
+  const groups = new Map<
+    string,
+    {
+      label: string;
+      rationale?: string;
+      relatedLabels: Set<string>;
+      linkedNodeIds: Set<string>;
+      suggestionCount: number;
+    }
+  >();
+
+  function ensureGroup(label: string) {
+    const key = normalizeThemeKey(label);
+    if (!key) {
+      return null;
+    }
+    const current =
+      groups.get(key) ??
+      {
+        label,
+        rationale: undefined,
+        relatedLabels: new Set<string>(),
+        linkedNodeIds: new Set<string>(),
+        suggestionCount: 0,
+      };
+    groups.set(key, current);
+    return { key, group: current };
+  }
+
+  for (const node of nodes) {
+    for (const concept of node.concepts) {
+      const match = ensureGroup(concept);
+      match?.group.linkedNodeIds.add(node.id);
+    }
+  }
+
+  for (const suggestion of suggestions.filter((item) => item.approved)) {
+    const match = ensureGroup(suggestion.label);
+    if (!match) {
+      continue;
+    }
+    match.group.suggestionCount += 1;
+    match.group.rationale ??= suggestion.rationale;
+    match.group.linkedNodeIds.add(suggestion.sourceDraftId);
+    suggestion.relatedConceptLabels.forEach((label) => {
+      if (normalizeThemeKey(label) !== match.key) {
+        match.group.relatedLabels.add(label);
+      }
+    });
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, group]) => ({
+      key,
+      label: group.label,
+      rationale: group.rationale,
+      relatedLabels: Array.from(group.relatedLabels).sort((left, right) =>
+        left.localeCompare(right),
+      ),
+      linkedNodes: Array.from(group.linkedNodeIds)
+        .map((nodeId) => nodes.find((node) => node.id === nodeId))
+        .filter((node): node is KnowledgeGraphNode => Boolean(node))
+        .sort((left, right) => left.title.localeCompare(right.title)),
+      suggestionCount: group.suggestionCount,
+    }))
+    .sort((left, right) => {
+      if (left.linkedNodes.length !== right.linkedNodes.length) {
+        return right.linkedNodes.length - left.linkedNodes.length;
+      }
+      return left.label.localeCompare(right.label);
+    });
 }
 
 function normalizeThemeKey(value: string) {
