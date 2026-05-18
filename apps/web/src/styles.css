@@ -220,7 +220,7 @@ textarea {
 .draft-thumb,
 .selected-draft-image,
 .detail-image {
-  object-fit: cover;
+  object-fit: contain;
   background: rgba(111, 87, 35, 0.08);
 }
 
@@ -310,7 +310,7 @@ textarea {
 
 .selected-draft-image {
   width: 100%;
-  max-height: 260px;
+  max-height: 520px;
   border-radius: 18px;
 }
 
@@ -831,7 +831,7 @@ textarea {
 
 .detail-image {
   width: 100%;
-  max-height: 260px;
+  max-height: 520px;
   border-radius: 18px;
 }
 
