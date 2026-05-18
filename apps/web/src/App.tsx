@@ -314,6 +314,24 @@ export default function App() {
     }
   }
 
+  async function handleAnalyzeImageAsset(draft: MediaDraft) {
+    const asset = draft.preview.imageAsset;
+    if (!asset) {
+      return;
+    }
+    try {
+      await api.analyzeImageAsset(asset.id, {
+        title: draft.preview.title,
+        notes: draft.preview.excerpt,
+        reflection: draft.reflection ?? reflection,
+      });
+      setStatus("Image analyzed. Suggestions can now use the image context.");
+      await refreshCore();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to analyze image.");
+    }
+  }
+
   async function handleDismissSuggestion(suggestionId: string) {
     try {
       await api.dismissConceptSuggestion(suggestionId);
@@ -596,11 +614,33 @@ export default function App() {
                   <div className="reflect-shell">
                     <div className="selected-draft-summary">
                       {selectedDraft.preview.imageAsset ? (
-                        <img
-                          className="selected-draft-image"
-                          src={selectedDraft.preview.imageAsset.url}
-                          alt={selectedDraft.preview.imageAsset.altText ?? selectedDraft.preview.title}
-                        />
+                        <>
+                          <img
+                            className="selected-draft-image"
+                            src={selectedDraft.preview.imageAsset.url}
+                            alt={selectedDraft.preview.imageAsset.altText ?? selectedDraft.preview.title}
+                          />
+                          <div className="image-analysis-panel">
+                            <div>
+                              <strong>Image understanding</strong>
+                              <small>
+                                {selectedDraft.preview.imageAsset.analysis?.status === "complete"
+                                  ? "Analyzed locally"
+                                  : "Not analyzed yet"}
+                              </small>
+                            </div>
+                            <button
+                              className="tertiary compact"
+                              type="button"
+                              onClick={() => handleAnalyzeImageAsset(selectedDraft)}
+                            >
+                              Analyze
+                            </button>
+                            {selectedDraft.preview.imageAsset.analysis ? (
+                              <ImageAnalysisSummary asset={selectedDraft.preview.imageAsset} />
+                            ) : null}
+                          </div>
+                        </>
                       ) : null}
                       <strong>{selectedDraft.preview.title}</strong>
                       <p>{selectedDraft.preview.excerpt || "No excerpt captured yet."}</p>
@@ -996,6 +1036,34 @@ export default function App() {
   );
 }
 
+function ImageAnalysisSummary({ asset }: { asset: MediaAsset }) {
+  const analysis = asset.analysis;
+  if (!analysis) {
+    return null;
+  }
+
+  return (
+    <div className="analysis-summary">
+      {analysis.summary ? <p>{analysis.summary}</p> : null}
+      {analysis.detectedText ? (
+        <p>
+          <strong>Detected text:</strong> {analysis.detectedText}
+        </p>
+      ) : null}
+      {analysis.suggestedConcepts && analysis.suggestedConcepts.length > 0 ? (
+        <div className="detail-meta">
+          {analysis.suggestedConcepts.map((concept) => (
+            <span key={concept} className="meta-chip">
+              {concept}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {analysis.model ? <small>{analysis.model}</small> : null}
+    </div>
+  );
+}
+
 function ConceptLibrary({
   groups,
   onViewEntry,
@@ -1243,11 +1311,19 @@ function GraphExplorer({
               <strong>{detail.title}</strong>
             </div>
             {detail.imageAsset ? (
-              <img
-                className="detail-image"
-                src={detail.imageAsset.url}
-                alt={detail.imageAsset.altText ?? detail.title}
-              />
+              <>
+                <img
+                  className="detail-image"
+                  src={detail.imageAsset.url}
+                  alt={detail.imageAsset.altText ?? detail.title}
+                />
+                {detail.imageAsset.analysis ? (
+                  <div className="detail-section">
+                    <small>Image understanding</small>
+                    <ImageAnalysisSummary asset={detail.imageAsset} />
+                  </div>
+                ) : null}
+              </>
             ) : null}
             <p className="detail-summary">{detail.summary}</p>
             <div className="detail-sections">

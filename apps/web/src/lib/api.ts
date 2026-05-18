@@ -48,6 +48,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  analyzeImageAsset: (
+    assetId: string,
+    payload: { title?: string; notes?: string; reflection?: string },
+  ) =>
+    request<{ asset: MediaAsset }>(`/media/assets/${assetId}/analyze`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   listDrafts: () => request<{ drafts: MediaDraft[] }>("/media/drafts"),
   getPrompts: (draftId: string) =>
     request<{ prompts: { id: string; prompt: string }[] }>("/reflections/prompts", {

@@ -67,6 +67,40 @@ test("buildConceptSuggestionCandidates includes approval evidence", () => {
   assert.ok(candidates.some((candidate) => candidate.evidence?.reflectionPhrase));
 });
 
+test("buildConceptSuggestionCandidates uses image analysis concepts", () => {
+  const candidates = buildConceptSuggestionCandidates({
+    id: "draft-image",
+    status: "saved",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    preview: {
+      title: "A saved image",
+      excerpt: "Image saved for reflection.",
+      domain: "uploaded-image",
+      mediaType: "image",
+      imageAsset: {
+        id: "asset-1",
+        kind: "image",
+        filename: "asset-1.png",
+        mimeType: "image/png",
+        byteSize: 1000,
+        url: "http://localhost:4000/media-assets/asset-1.png",
+        createdAt: new Date().toISOString(),
+        analysis: {
+          status: "complete",
+          summary: "The image is a meme about embodied attention.",
+          detectedText: "Attention is embodied, not just conceptual.",
+          suggestedConcepts: ["Embodied Attention", "Conceptual Knowledge"],
+        },
+      },
+    },
+    reflection: "I saved this because it captures how embodiment changes learning.",
+    evaluation: undefined,
+  });
+
+  assert.equal(candidates[0]?.label, "Embodied Attention");
+});
+
 test("buildQuizQuestions can prioritize graph-rich weak entries", () => {
   const now = new Date().toISOString();
   const questions = buildQuizQuestions(

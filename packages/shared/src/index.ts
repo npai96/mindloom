@@ -44,6 +44,16 @@ export type ReflectionPrompt = {
   prompt: string;
 };
 
+export type MediaAssetAnalysis = {
+  status: "pending" | "complete" | "failed";
+  summary?: string;
+  detectedText?: string;
+  suggestedConcepts?: string[];
+  model?: string;
+  analyzedAt?: string;
+  error?: string;
+};
+
 export type MediaAsset = {
   id: string;
   kind: "image";
@@ -52,7 +62,7 @@ export type MediaAsset = {
   byteSize: number;
   url: string;
   altText?: string;
-  visionSummary?: string;
+  analysis?: MediaAssetAnalysis;
   createdAt: string;
 };
 

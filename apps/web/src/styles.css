@@ -314,6 +314,39 @@ textarea {
   border-radius: 18px;
 }
 
+.image-analysis-panel,
+.analysis-summary {
+  display: grid;
+  gap: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(89, 68, 20, 0.1);
+  background: rgba(255, 252, 247, 0.72);
+  padding: 12px;
+}
+
+.image-analysis-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.image-analysis-panel .analysis-summary {
+  grid-column: 1 / -1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.image-analysis-panel small,
+.analysis-summary small {
+  color: rgba(89, 68, 20, 0.58);
+}
+
+.analysis-summary p {
+  margin: 0;
+  color: rgba(63, 48, 16, 0.8);
+  line-height: 1.4;
+}
+
 .actions,
 .prompt-list,
 .tab-row,

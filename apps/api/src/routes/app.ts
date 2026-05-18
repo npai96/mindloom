@@ -26,7 +26,7 @@ import {
   scoreQuizAnswer,
 } from "../services/reflection.js";
 import { buildKnowledgeGraph } from "../services/knowledge.js";
-import { persistImageAsset } from "../services/mediaAssets.js";
+import { analyzeImageAsset, persistImageAsset } from "../services/mediaAssets.js";
 import { createDraftRecord, store } from "../services/store.js";
 
 const env = getEnv();
@@ -609,6 +609,28 @@ appRouter.post("/media/assets", (req, res) => {
       },
     });
   }
+});
+
+appRouter.post("/media/assets/:id/analyze", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const asset = store.getMediaAsset(req.params.id, sessionId);
+  if (!asset) {
+    return sendError(res, 404, "Image asset not found.");
+  }
+  const body = readJson<{
+    title?: string;
+    notes?: string;
+    reflection?: string;
+  }>(req);
+  const analysis = analyzeImageAsset(asset, body);
+  const updated = store.updateMediaAssetAnalysis(asset.id, sessionId, analysis);
+  if (!updated) {
+    return sendError(res, 404, "Image asset not found.");
+  }
+  res.json({ asset: updated });
 });
 
 appRouter.get("/media/drafts", (req, res) => {

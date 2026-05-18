@@ -101,6 +101,7 @@ db.exec(`
     url TEXT NOT NULL,
     alt_text TEXT,
     vision_summary TEXT,
+    analysis_json TEXT,
     created_at TEXT NOT NULL
   );
 
@@ -198,6 +199,16 @@ if (!conceptSuggestionColumns.some((column) => column.name === "status")) {
 }
 if (!conceptSuggestionColumns.some((column) => column.name === "evidence_json")) {
   db.exec(`ALTER TABLE concept_suggestions ADD COLUMN evidence_json TEXT`);
+}
+
+const mediaAssetColumns = db
+  .prepare(`PRAGMA table_info(media_assets)`)
+  .all() as Array<{ name: string }>;
+if (
+  mediaAssetColumns.length > 0 &&
+  !mediaAssetColumns.some((column) => column.name === "analysis_json")
+) {
+  db.exec(`ALTER TABLE media_assets ADD COLUMN analysis_json TEXT`);
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -300,6 +311,7 @@ function mapEdgeCandidate(row: Record<string, unknown>): GraphEdgeCandidate {
 }
 
 function mapMediaAsset(row: Record<string, unknown>): MediaAsset {
+  const legacyVisionSummary = row.vision_summary ? String(row.vision_summary) : undefined;
   return {
     id: String(row.id),
     kind: "image",
@@ -308,7 +320,15 @@ function mapMediaAsset(row: Record<string, unknown>): MediaAsset {
     byteSize: Number(row.byte_size),
     url: String(row.url),
     altText: row.alt_text ? String(row.alt_text) : undefined,
-    visionSummary: row.vision_summary ? String(row.vision_summary) : undefined,
+    analysis: parseJson(
+      row.analysis_json ? String(row.analysis_json) : undefined,
+      legacyVisionSummary
+        ? {
+            status: "complete",
+            summary: legacyVisionSummary,
+          }
+        : undefined,
+    ) as MediaAsset["analysis"],
     createdAt: String(row.created_at),
   };
 }
@@ -387,13 +407,18 @@ const upsertSavedArtifactStmt = db.prepare(`
 const insertMediaAssetStmt = db.prepare(`
   INSERT INTO media_assets (
     id, owner_session_id, owner_user_id, kind, filename, mime_type, byte_size, url,
-    alt_text, vision_summary, created_at
+    alt_text, vision_summary, analysis_json, created_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const getMediaAssetStmt = db.prepare(`
   SELECT *
   FROM media_assets
+  WHERE id = ? AND (owner_session_id = ? OR owner_user_id = ?)
+`);
+const updateMediaAssetAnalysisStmt = db.prepare(`
+  UPDATE media_assets
+  SET analysis_json = ?
   WHERE id = ? AND (owner_session_id = ? OR owner_user_id = ?)
 `);
 const getSavedArtifactStmt = db.prepare(`
@@ -690,7 +715,8 @@ export const store = {
       asset.byteSize,
       asset.url,
       asset.altText ?? null,
-      asset.visionSummary ?? null,
+      asset.analysis?.summary ?? null,
+      asset.analysis ? serializeJson(asset.analysis) : null,
       asset.createdAt,
     );
     return asset;
@@ -703,6 +729,36 @@ export const store = {
       session?.userId ?? null,
     ) as Record<string, unknown> | undefined;
     return row ? mapMediaAsset(row) : undefined;
+  },
+  updateMediaAssetAnalysis(
+    assetId: string,
+    sessionId: string,
+    analysis: NonNullable<MediaAsset["analysis"]>,
+  ) {
+    const session = this.getSession(sessionId);
+    const existing = this.getMediaAsset(assetId, sessionId);
+    if (!existing) {
+      return undefined;
+    }
+    updateMediaAssetAnalysisStmt.run(
+      serializeJson(analysis),
+      assetId,
+      sessionId,
+      session?.userId ?? null,
+    );
+    const updated = { ...existing, analysis };
+    for (const draft of this.listDrafts(sessionId)) {
+      if (draft.preview.imageAsset?.id !== assetId) {
+        continue;
+      }
+      this.updateDraft(draft.id, sessionId, {
+        preview: {
+          ...draft.preview,
+          imageAsset: updated,
+        },
+      });
+    }
+    return updated;
   },
   saveConceptSuggestion(suggestion: ConceptSuggestion) {
     insertConceptSuggestionStmt.run(

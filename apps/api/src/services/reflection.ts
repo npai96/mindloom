@@ -95,11 +95,20 @@ export function buildConceptSuggestionCandidates(
     draft.preview.title,
     draft.reflection,
     draft.preview.excerpt,
+    draft.preview.imageAsset?.analysis?.summary,
+    draft.preview.imageAsset?.analysis?.detectedText,
+    draft.preview.imageAsset?.analysis?.suggestedConcepts?.join(" "),
   ]);
-  const sourcePhrases = extractMeaningfulPhrases([draft.preview.title, draft.preview.excerpt]);
+  const sourcePhrases = extractMeaningfulPhrases([
+    draft.preview.title,
+    draft.preview.excerpt,
+    draft.preview.imageAsset?.analysis?.summary,
+    draft.preview.imageAsset?.analysis?.detectedText,
+  ]);
   const reflectionPhrases = extractMeaningfulPhrases([draft.reflection]);
   const labels = Array.from(
     new Set([
+      ...(draft.preview.imageAsset?.analysis?.suggestedConcepts ?? []),
       ...phrases.slice(0, 3),
       fallbackConceptLabel(draft.preview.domain, draft.preview.mediaType),
     ]),

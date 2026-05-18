@@ -165,3 +165,44 @@ test("store persists image media assets for drafts", () => {
   assert.equal(asset.kind, "image");
   assert.equal(store.getMediaAsset("asset-1", "session-e")?.altText, "A test diagram");
 });
+
+test("store updates drafts that reference analyzed image assets", () => {
+  store.createSession("session-f");
+  const asset = store.saveMediaAsset("session-f", {
+    id: "asset-2",
+    kind: "image",
+    filename: "asset-2-image.png",
+    mimeType: "image/png",
+    byteSize: 2048,
+    url: "http://localhost:4000/media-assets/asset-2-image.png",
+    altText: "A nervous system diagram",
+    createdAt: new Date().toISOString(),
+  });
+  store.createDraft(
+    createDraftRecord("session-f", {
+      id: "draft-image-1",
+      status: "draft",
+      preview: {
+        title: "Nervous system diagram",
+        excerpt: "A diagram about regulation.",
+        domain: "uploaded-image",
+        mediaType: "image",
+        imageAsset: asset,
+      },
+    }),
+  );
+
+  const updated = store.updateMediaAssetAnalysis("asset-2", "session-f", {
+    status: "complete",
+    summary: "A diagram about nervous system regulation.",
+    suggestedConcepts: ["Nervous System", "Regulation"],
+    model: "local-placeholder-v1",
+    analyzedAt: new Date().toISOString(),
+  });
+
+  assert.equal(updated?.analysis?.status, "complete");
+  assert.deepEqual(
+    store.getDraft("draft-image-1", "session-f")?.preview.imageAsset?.analysis?.suggestedConcepts,
+    ["Nervous System", "Regulation"],
+  );
+});
