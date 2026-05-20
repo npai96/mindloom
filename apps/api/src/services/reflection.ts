@@ -97,6 +97,7 @@ export function buildConceptSuggestionCandidates(
     draft.preview.excerpt,
     draft.preview.imageAsset?.analysis?.summary,
     draft.preview.imageAsset?.analysis?.detectedText,
+    draft.preview.imageAsset?.analysis?.visualElements?.join(" "),
     draft.preview.imageAsset?.analysis?.suggestedConcepts?.join(" "),
   ]);
   const sourcePhrases = extractMeaningfulPhrases([
@@ -104,6 +105,7 @@ export function buildConceptSuggestionCandidates(
     draft.preview.excerpt,
     draft.preview.imageAsset?.analysis?.summary,
     draft.preview.imageAsset?.analysis?.detectedText,
+    draft.preview.imageAsset?.analysis?.visualElements?.join(" "),
   ]);
   const reflectionPhrases = extractMeaningfulPhrases([draft.reflection]);
   const labels = Array.from(

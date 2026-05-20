@@ -611,7 +611,7 @@ appRouter.post("/media/assets", (req, res) => {
   }
 });
 
-appRouter.post("/media/assets/:id/analyze", (req, res) => {
+appRouter.post("/media/assets/:id/analyze", async (req, res) => {
   const sessionId = getSessionId(req, res);
   if (!sessionId) {
     return;
@@ -625,7 +625,10 @@ appRouter.post("/media/assets/:id/analyze", (req, res) => {
     notes?: string;
     reflection?: string;
   }>(req);
-  const analysis = analyzeImageAsset(asset, body);
+  const analysis = await analyzeImageAsset(asset, body, {
+    openaiApiKey: env.openaiApiKey,
+    openaiImageModel: env.openaiImageModel,
+  });
   const updated = store.updateMediaAssetAnalysis(asset.id, sessionId, analysis);
   if (!updated) {
     return sendError(res, 404, "Image asset not found.");

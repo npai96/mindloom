@@ -320,12 +320,16 @@ export default function App() {
       return;
     }
     try {
-      await api.analyzeImageAsset(asset.id, {
+      const result = await api.analyzeImageAsset(asset.id, {
         title: draft.preview.title,
         notes: draft.preview.excerpt,
         reflection: draft.reflection ?? reflection,
       });
-      setStatus("Image analyzed. Suggestions can now use the image context.");
+      setStatus(
+        result.asset.analysis?.status === "failed"
+          ? "Image analysis failed. Check the image understanding panel for details."
+          : "Image analyzed. Suggestions can now use the image context.",
+      );
       await refreshCore();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to analyze image.");
@@ -1044,11 +1048,30 @@ function ImageAnalysisSummary({ asset }: { asset: MediaAsset }) {
 
   return (
     <div className="analysis-summary">
+      <small>
+        {analysis.provider === "openai"
+          ? `Analyzed with OpenAI${analysis.model ? ` (${analysis.model})` : ""}`
+          : "Local placeholder analysis. Add OPENAI_API_KEY for real image recognition."}
+      </small>
+      {analysis.status === "failed" && analysis.error ? (
+        <p>
+          <strong>Analysis failed:</strong> {analysis.error}
+        </p>
+      ) : null}
       {analysis.summary ? <p>{analysis.summary}</p> : null}
       {analysis.detectedText ? (
         <p>
           <strong>Detected text:</strong> {analysis.detectedText}
         </p>
+      ) : null}
+      {analysis.visualElements && analysis.visualElements.length > 0 ? (
+        <div className="detail-meta">
+          {analysis.visualElements.map((item) => (
+            <span key={item} className="meta-chip">
+              {item}
+            </span>
+          ))}
+        </div>
       ) : null}
       {analysis.suggestedConcepts && analysis.suggestedConcepts.length > 0 ? (
         <div className="detail-meta">
@@ -1059,7 +1082,6 @@ function ImageAnalysisSummary({ asset }: { asset: MediaAsset }) {
           ))}
         </div>
       ) : null}
-      {analysis.model ? <small>{analysis.model}</small> : null}
     </div>
   );
 }

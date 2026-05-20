@@ -46,8 +46,10 @@ export type ReflectionPrompt = {
 
 export type MediaAssetAnalysis = {
   status: "pending" | "complete" | "failed";
+  provider?: "local" | "openai";
   summary?: string;
   detectedText?: string;
+  visualElements?: string[];
   suggestedConcepts?: string[];
   model?: string;
   analyzedAt?: string;

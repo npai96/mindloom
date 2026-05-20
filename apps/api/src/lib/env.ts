@@ -41,6 +41,8 @@ export type AppEnv = {
   paradigmBaseUrl?: string;
   paradigmAppUrl?: string;
   appCallbackUrl?: string;
+  openaiApiKey?: string;
+  openaiImageModel: string;
 };
 
 export function getEnv(): AppEnv {
@@ -61,5 +63,7 @@ export function getEnv(): AppEnv {
     paradigmBaseUrl: process.env.PARADIGM_BASE_URL,
     paradigmAppUrl: process.env.PARADIGM_APP_URL,
     appCallbackUrl: process.env.APP_CALLBACK_URL,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiImageModel: process.env.OPENAI_IMAGE_MODEL ?? "gpt-4.1-mini",
   };
 }
