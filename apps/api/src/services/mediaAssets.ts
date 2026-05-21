@@ -84,7 +84,13 @@ export async function analyzeImageAsset(
   },
 ): Promise<MediaAssetAnalysis> {
   if (!options.openaiApiKey) {
-    return analyzeImageAssetLocally(asset, context);
+    return {
+      status: "failed",
+      provider: "local",
+      error:
+        "Image understanding is not configured. Add OPENAI_API_KEY to enable real image recognition.",
+      analyzedAt: new Date().toISOString(),
+    };
   }
 
   try {
@@ -101,31 +107,6 @@ export async function analyzeImageAsset(
       analyzedAt: new Date().toISOString(),
     };
   }
-}
-
-function analyzeImageAssetLocally(
-  asset: MediaAsset,
-  context: {
-    title?: string;
-    notes?: string;
-    reflection?: string;
-  } = {},
-): MediaAssetAnalysis {
-  const text = [context.title, context.notes, context.reflection, asset.altText, asset.filename]
-    .filter(Boolean)
-    .join(" ");
-  const suggestedConcepts = extractConcepts(text);
-  const summarySeed = context.notes || context.title || asset.altText || asset.filename;
-
-  return {
-    status: "complete",
-    provider: "local",
-    summary: `Local image analysis seed: ${summarySeed}`,
-    detectedText: context.notes || asset.altText,
-    suggestedConcepts,
-    model: "local-placeholder-v1",
-    analyzedAt: new Date().toISOString(),
-  };
 }
 
 async function analyzeImageAssetWithOpenAI(
@@ -252,46 +233,4 @@ function asStringArray(value: unknown) {
         .filter(Boolean)
         .slice(0, 6)
     : undefined;
-}
-
-function extractConcepts(value: string) {
-  const stopwords = new Set([
-    "about",
-    "because",
-    "image",
-    "jpeg",
-    "manual",
-    "media",
-    "note",
-    "png",
-    "saved",
-    "screenshot",
-    "this",
-    "upload",
-    "webp",
-  ]);
-  const normalized = value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const tokens = normalized
-    .split(" ")
-    .filter((token) => token.length > 4 && !stopwords.has(token));
-  const phrases: string[] = [];
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index + 1]) {
-      phrases.push(toTitleCase(`${tokens[index]} ${tokens[index + 1]}`));
-    }
-    phrases.push(toTitleCase(tokens[index]));
-  }
-  return Array.from(new Set(phrases)).slice(0, 4);
-}
-
-function toTitleCase(value: string) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .map((token) => token[0]?.toUpperCase() + token.slice(1))
-    .join(" ");
 }

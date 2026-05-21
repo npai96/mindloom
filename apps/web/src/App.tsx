@@ -1051,7 +1051,7 @@ function ImageAnalysisSummary({ asset }: { asset: MediaAsset }) {
       <small>
         {analysis.provider === "openai"
           ? `Analyzed with OpenAI${analysis.model ? ` (${analysis.model})` : ""}`
-          : "Local placeholder analysis. Add OPENAI_API_KEY for real image recognition."}
+          : "Image understanding is not configured."}
       </small>
       {analysis.status === "failed" && analysis.error ? (
         <p>

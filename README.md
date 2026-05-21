@@ -16,7 +16,7 @@ Web-first reflective media app built on the Paradigm third-party app model. User
 2. Copy `apps/api/env.example` to `apps/api/.env`
 3. Copy `apps/web/env.example` to `apps/web/.env`
 4. If you want live Paradigm integration, fill in the `PARADIGM_*` values from the Developer Dashboard and make sure `APP_CALLBACK_URL` matches your registered callback exactly
-5. If you want real image understanding, set `OPENAI_API_KEY`; otherwise image analysis uses a local placeholder
+5. If you want image understanding, set `OPENAI_API_KEY`; otherwise uploads still work, but analysis shows a configuration warning
 6. Run the API with `npm run dev -w @actually-learn/api`
 7. Run the web app with `npm run dev -w @actually-learn/web`
 
@@ -60,7 +60,7 @@ Then register the app in the Paradigm Developer Dashboard with:
 - App-private backend state now persists to a local SQLite database at `apps/api/data/actually-learn.sqlite` by default. Override with `APP_DB_PATH` if you want a different location.
 - Paradigm writes occur only on commit and concept approval, and only when the required environment variables are configured.
 - Reflection evaluation is implemented as a lightweight local rubric so the hard gate works without an external LLM dependency. This can be swapped for a model-backed evaluator later without changing the API contracts.
-- Uploaded image analysis uses the OpenAI Responses API when `OPENAI_API_KEY` is set, and falls back to a clearly labeled local placeholder when it is not.
+- Uploaded image analysis uses the OpenAI Responses API when `OPENAI_API_KEY` is set. If it is not set, uploads and saving still work, but the analysis panel shows a configuration warning instead of fabricating image understanding.
 - The SQLite integration uses Node's built-in `node:sqlite` module, which currently emits an experimental warning on test runs under Node 24.
 
 ## PR security gates

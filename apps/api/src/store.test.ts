@@ -196,7 +196,8 @@ test("store updates drafts that reference analyzed image assets", () => {
     status: "complete",
     summary: "A diagram about nervous system regulation.",
     suggestedConcepts: ["Nervous System", "Regulation"],
-    model: "local-placeholder-v1",
+    provider: "openai",
+    model: "gpt-4.1-mini",
     analyzedAt: new Date().toISOString(),
   });
 

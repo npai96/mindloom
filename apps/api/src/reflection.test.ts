@@ -7,6 +7,7 @@ import {
   buildQuizQuestions,
   evaluateReflection,
 } from "./services/reflection.js";
+import { analyzeImageAsset } from "./services/mediaAssets.js";
 
 test("evaluateReflection accepts thoughtful reflections", () => {
   const result = evaluateReflection(
@@ -22,6 +23,34 @@ test("evaluateReflection rejects shallow summaries", () => {
 
   assert.equal(result.accepted, false);
   assert.match(result.feedback, /why this matters to you/i);
+});
+
+test("analyzeImageAsset warns instead of fabricating analysis without OpenAI key", async () => {
+  const analysis = await analyzeImageAsset(
+    {
+      id: "asset-no-key",
+      kind: "image",
+      filename: "asset-no-key.png",
+      mimeType: "image/png",
+      byteSize: 1000,
+      url: "http://localhost:4000/media-assets/asset-no-key.png",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      title: "A meaningful image",
+      notes: "These notes should not become fake OCR.",
+    },
+    {
+      openaiImageModel: "gpt-4.1-mini",
+    },
+  );
+
+  assert.equal(analysis.status, "failed");
+  assert.equal(analysis.provider, "local");
+  assert.match(analysis.error ?? "", /OPENAI_API_KEY/);
+  assert.equal(analysis.summary, undefined);
+  assert.equal(analysis.detectedText, undefined);
+  assert.equal(analysis.suggestedConcepts, undefined);
 });
 
 test("buildConceptSuggestionCandidate derives a specific concept from reflection text", () => {
