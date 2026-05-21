@@ -21,6 +21,7 @@ import { ParadigmClient } from "../services/paradigm.js";
 import {
   buildConceptSuggestionCandidates,
   buildQuizQuestions,
+  buildReviewQueueItems,
   evaluateReflection,
   generateReflectionPrompts,
   scoreQuizAnswer,
@@ -995,17 +996,43 @@ appRouter.post("/edges/update", (req, res) => {
   res.json({ edge: updated });
 });
 
-appRouter.get("/quiz/weekly", (req, res) => {
-  const sessionId = getSessionId(req, res);
-  if (!sessionId) {
-    return;
-  }
-  const knowledge = buildKnowledgeGraph({
+function buildLearningContext(sessionId: string) {
+  return buildKnowledgeGraph({
     drafts: store.listDrafts(sessionId),
     suggestions: store.listConceptSuggestions(sessionId),
     graph: store.getGraph(sessionId),
     edgeCandidates: store.listEdgeCandidates(sessionId),
   });
+}
+
+appRouter.get("/review/queue", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const knowledge = buildLearningContext(sessionId);
+  res.json({
+    items: buildReviewQueueItems(
+      store.listDrafts(sessionId),
+      (draftId) => store.getRepetitionScore(draftId),
+      (draftId) => {
+        const node = knowledge.nodes.find((item) => item.id === draftId);
+        return {
+          concepts: node?.concepts ?? [],
+          edgeCount: knowledge.edges.filter((edge) => edge.from === draftId || edge.to === draftId)
+            .length,
+        };
+      },
+    ),
+  });
+});
+
+appRouter.get("/quiz/weekly", (req, res) => {
+  const sessionId = getSessionId(req, res);
+  if (!sessionId) {
+    return;
+  }
+  const knowledge = buildLearningContext(sessionId);
   const questions = buildQuizQuestions(
     store.listDrafts(sessionId),
     (draftId) => store.getRepetitionScore(draftId),

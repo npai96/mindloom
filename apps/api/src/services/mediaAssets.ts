@@ -165,7 +165,7 @@ async function analyzeImageAssetWithOpenAI(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`OpenAI request failed (${response.status}): ${body.slice(0, 240)}`);
+    throw new Error(formatOpenAIImageAnalysisError(response.status, body));
   }
 
   const body = (await response.json()) as Record<string, unknown>;
@@ -233,4 +233,32 @@ function asStringArray(value: unknown) {
         .filter(Boolean)
         .slice(0, 6)
     : undefined;
+}
+
+export function formatOpenAIImageAnalysisError(status: number, body = "") {
+  if (status === 401 || status === 403) {
+    return "OpenAI image understanding is not authorized. Check that OPENAI_API_KEY is valid for this project.";
+  }
+  if (status === 429) {
+    return "OpenAI image understanding is unavailable because the current project has no remaining quota or billing. Uploading and saving still work.";
+  }
+  if (status >= 500) {
+    return "OpenAI image understanding is temporarily unavailable. Try again later.";
+  }
+  if (status === 400) {
+    return "OpenAI could not analyze this image request. Try a smaller JPEG, PNG, WebP, or GIF.";
+  }
+  return `OpenAI image understanding failed (${status}). ${summarizeOpenAIError(body)}`;
+}
+
+function summarizeOpenAIError(body: string) {
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown } };
+    if (typeof parsed.error?.message === "string") {
+      return parsed.error.message.slice(0, 160);
+    }
+  } catch {
+    // Fall through to plain text summary.
+  }
+  return body.slice(0, 160) || "No additional details were returned.";
 }

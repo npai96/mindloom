@@ -7,6 +7,7 @@ import type {
   MediaDraft,
   MeResponse,
   QuizResult,
+  ReviewQueueItem,
 } from "@actually-learn/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api";
@@ -99,6 +100,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ edgeId, status }),
     }),
+  getReviewQueue: () => request<{ items: ReviewQueueItem[] }>("/review/queue"),
   getGraph: () => request<GraphSnapshot>("/graph"),
   getKnowledgeGraph: () => request<KnowledgeGraph>("/knowledge-graph"),
   createWeeklyQuiz: () =>

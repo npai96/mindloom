@@ -45,7 +45,12 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, paradigmEnabled: env.paradigmEnabled });
+  res.json({
+    ok: true,
+    paradigmEnabled: env.paradigmEnabled,
+    openaiImageAnalysisEnabled: Boolean(env.openaiApiKey?.trim()),
+    openaiImageModel: env.openaiImageModel,
+  });
 });
 
 app.use("/api", appRouter);

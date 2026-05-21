@@ -182,6 +182,17 @@ export type QuizQuestion = {
   conceptHint?: string;
 };
 
+export type ReviewQueueItem = {
+  draftId: string;
+  title: string;
+  reason: string;
+  priority: number;
+  repetitionScore: number;
+  edgeCount: number;
+  concepts: string[];
+  updatedAt: string;
+};
+
 export type QuizAnswerPayload = {
   answer: string;
 };

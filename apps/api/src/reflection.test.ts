@@ -5,9 +5,10 @@ import {
   buildConceptSuggestionCandidate,
   buildConceptSuggestionCandidates,
   buildQuizQuestions,
+  buildReviewQueueItems,
   evaluateReflection,
 } from "./services/reflection.js";
-import { analyzeImageAsset } from "./services/mediaAssets.js";
+import { analyzeImageAsset, formatOpenAIImageAnalysisError } from "./services/mediaAssets.js";
 
 test("evaluateReflection accepts thoughtful reflections", () => {
   const result = evaluateReflection(
@@ -51,6 +52,20 @@ test("analyzeImageAsset warns instead of fabricating analysis without OpenAI key
   assert.equal(analysis.summary, undefined);
   assert.equal(analysis.detectedText, undefined);
   assert.equal(analysis.suggestedConcepts, undefined);
+});
+
+test("formatOpenAIImageAnalysisError maps quota failures to friendly copy", () => {
+  const message = formatOpenAIImageAnalysisError(
+    429,
+    JSON.stringify({
+      error: {
+        message: "You exceeded your current quota, please check your plan and billing details.",
+      },
+    }),
+  );
+
+  assert.match(message, /quota|billing/i);
+  assert.doesNotMatch(message, /You exceeded your current quota/);
 });
 
 test("buildConceptSuggestionCandidate derives a specific concept from reflection text", () => {
@@ -170,4 +185,47 @@ test("buildQuizQuestions can prioritize graph-rich weak entries", () => {
 
   assert.equal(questions[0]?.draftId, "draft-weak");
   assert.equal(questions[0]?.conceptHint, "Safety Signals");
+});
+
+test("buildReviewQueueItems ranks weak connected entries first", () => {
+  const now = new Date().toISOString();
+  const items = buildReviewQueueItems(
+    [
+      {
+        id: "draft-known",
+        status: "saved",
+        createdAt: now,
+        updatedAt: now,
+        preview: {
+          title: "Known item",
+          excerpt: "",
+          domain: "manual",
+          mediaType: "note",
+        },
+        reflection: "I already remember this well.",
+      },
+      {
+        id: "draft-weak",
+        status: "saved",
+        createdAt: now,
+        updatedAt: now,
+        preview: {
+          title: "Weak connected item",
+          excerpt: "",
+          domain: "manual",
+          mediaType: "note",
+        },
+        reflection: "This needs another pass.",
+      },
+    ],
+    (draftId) => (draftId === "draft-weak" ? 0 : 3),
+    (draftId) =>
+      draftId === "draft-weak"
+        ? { concepts: ["Attention"], edgeCount: 2 }
+        : { concepts: [], edgeCount: 0 },
+  );
+
+  assert.equal(items[0]?.draftId, "draft-weak");
+  assert.equal(items[0]?.reason, "Weak recall");
+  assert.ok((items[0]?.priority ?? 0) > (items[1]?.priority ?? 0));
 });

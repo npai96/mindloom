@@ -470,7 +470,9 @@ textarea {
 
 .quiz-flow,
 .quiz-result-stack,
-.quiz-review-list {
+.quiz-review-list,
+.review-queue,
+.review-queue-list {
   display: grid;
   gap: 14px;
 }
@@ -506,6 +508,41 @@ textarea {
   padding: 14px 16px;
   display: grid;
   gap: 10px;
+}
+
+.review-queue-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid rgba(89, 68, 20, 0.12);
+  background: rgba(255, 252, 247, 0.84);
+  padding: 12px 14px;
+  color: #3f3010;
+}
+
+.review-queue-card div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.review-queue-card small {
+  color: rgba(89, 68, 20, 0.62);
+}
+
+.review-queue-card > span {
+  justify-self: end;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(200, 134, 39, 0.16);
+  color: #6c4711;
+  font-weight: 700;
+}
+
+.review-queue-card .detail-meta {
+  grid-column: 1 / -1;
 }
 
 .success-pill {

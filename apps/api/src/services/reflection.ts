@@ -4,6 +4,7 @@ import type {
   QuizQuestion,
   ReflectionEvaluation,
   ReflectionPrompt,
+  ReviewQueueItem,
 } from "@actually-learn/shared";
 
 function splitSentences(input: string) {
@@ -202,6 +203,42 @@ export function buildQuizQuestions(
   });
 }
 
+export function buildReviewQueueItems(
+  drafts: MediaDraft[],
+  repetitionScoreFor: (draftId: string) => number,
+  contextFor: (draftId: string) => { concepts: string[]; edgeCount: number } = () => ({
+    concepts: [],
+    edgeCount: 0,
+  }),
+): ReviewQueueItem[] {
+  return drafts
+    .filter((draft) => draft.status === "saved")
+    .map((draft) => {
+      const ageDays =
+        (Date.now() - new Date(draft.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
+      const repetitionScore = repetitionScoreFor(draft.id);
+      const context = contextFor(draft.id);
+      const memoryPressure = Math.max(0, 3 - repetitionScore);
+      const graphPressure =
+        Math.min(1.5, context.edgeCount * 0.3) + Math.min(1, context.concepts.length * 0.2);
+      const agePressure = Math.min(1.5, ageDays / 7);
+      const priority = Number((memoryPressure * 2 + graphPressure + agePressure).toFixed(2));
+
+      return {
+        draftId: draft.id,
+        title: draft.preview.title,
+        reason: reviewReason(repetitionScore, context.edgeCount, ageDays),
+        priority,
+        repetitionScore,
+        edgeCount: context.edgeCount,
+        concepts: context.concepts.slice(0, 4),
+        updatedAt: draft.updatedAt,
+      };
+    })
+    .sort((left, right) => right.priority - left.priority)
+    .slice(0, 5);
+}
+
 export function scoreQuizAnswer(question: QuizQuestion, answer: string) {
   const normalized = answer.trim().toLowerCase();
   const lengthOkay = normalized.split(/\s+/).filter(Boolean).length >= 6;
@@ -216,6 +253,19 @@ export function scoreQuizAnswer(question: QuizQuestion, answer: string) {
       ? "Nice recall. You retrieved enough detail to strengthen the memory."
       : "Try anchoring your answer to why it mattered, not just the source.",
   };
+}
+
+function reviewReason(repetitionScore: number, edgeCount: number, ageDays: number) {
+  if (repetitionScore <= 1) {
+    return "Weak recall";
+  }
+  if (ageDays >= 7) {
+    return "Due for revisit";
+  }
+  if (edgeCount > 0) {
+    return "Connected idea";
+  }
+  return "Fresh save";
 }
 
 function extractMeaningfulPhrases(values: Array<string | undefined>) {

@@ -9,6 +9,7 @@ import type {
   MediaDraft,
   MeResponse,
   QuizResult,
+  ReviewQueueItem,
 } from "@actually-learn/shared";
 
 import { api } from "./lib/api";
@@ -82,6 +83,7 @@ export default function App() {
   const [quiz, setQuiz] = useState<QuizSession | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
@@ -104,16 +106,18 @@ export default function App() {
   );
 
   async function refreshCore() {
-    const [meData, draftData, suggestionData, knowledgeData] = await Promise.all([
+    const [meData, draftData, suggestionData, knowledgeData, reviewData] = await Promise.all([
       api.getMe(),
       api.listDrafts(),
       api.listConceptSuggestions(),
       api.getKnowledgeGraph(),
+      api.getReviewQueue(),
     ]);
     setMe(meData);
     setDrafts(draftData.drafts);
     setSuggestions(suggestionData.suggestions);
     setKnowledgeModel(knowledgeData);
+    setReviewQueue(reviewData.items);
   }
 
   useEffect(() => {
@@ -935,6 +939,47 @@ export default function App() {
             <button className="primary" onClick={handleStartQuiz}>
               Generate quiz
             </button>
+          </div>
+
+          <div className="review-queue">
+            <div>
+              <strong>Review queue</strong>
+              <p className="subtle">The entries most worth revisiting before your next recap.</p>
+            </div>
+            {reviewQueue.length === 0 ? (
+              <div className="empty-state compact">
+                <strong>No review queue yet</strong>
+                <p>Save a few reflected entries and Mindloom will rank what to revisit.</p>
+              </div>
+            ) : (
+              <div className="review-queue-list">
+                {reviewQueue.map((item) => (
+                  <button
+                    key={item.draftId}
+                    className="review-queue-card"
+                    onClick={() => {
+                      setSelectedGraphNodeId(item.draftId);
+                      setKnowledgeTab("graph");
+                    }}
+                  >
+                    <div>
+                      <strong>{item.title}</strong>
+                      <small>{item.reason}</small>
+                    </div>
+                    <span>{Math.round(item.priority * 10)}</span>
+                    {item.concepts.length > 0 ? (
+                      <div className="detail-meta">
+                        {item.concepts.map((concept) => (
+                          <span key={concept} className="meta-chip">
+                            {concept}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {quiz ? (
